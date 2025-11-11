@@ -3,26 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MQTT Message Sender</title>
-    <!-- Link to the CSS file in the 'static' folder -->
+    <title>Card Sender Control</title>
+    
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <!-- Link to the JavaScript file, 'defer' makes it load after the HTML -->
-    <script src="{{ url_for('static', filename='script.js') }}" defer></script>
 </head>
 <body>
     <div class="container">
-        <h1>MQTT Message Sender</h1>
-        <p>Send a message to your Arduino (Topic: <code>{{ MQTT_TOPIC }}</code>)</p>
+        <h1>Card Sender Control</h1>
+        <p>Press Start to begin sending random card characters every second.</p>
 
-        <!-- This form will be handled by our JavaScript -->
-        <form id="message-form">
-            <label for="message-input">Message:</label>
-            <input type="text" id="message-input" name="message" placeholder="e.g., 'ON', 'OFF', or 'TOGGLE'" required>
-            <button type="submit" id="submit-button">Send Message</button>
-        </form>
+        <div class="button-group">
+            <button id="start-button">Start Sending</button>
+            <button id="stop-button">Stop Sending</button>
+        </div>
 
-        <!-- This paragraph will show status messages from the JavaScript -->
-        <p id="status-message"></p>
+        <p id="status-message">Status: Idle</p>
     </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}" defer></script>
 </body>
 </html>

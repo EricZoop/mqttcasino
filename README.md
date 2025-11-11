@@ -7,3 +7,8 @@ Activate
 ```cmd
 venv\Scripts\activate
 ```
+
+Run
+```cmd
+python app.py
+```
