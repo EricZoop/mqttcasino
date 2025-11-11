@@ -1,3 +1,9 @@
+Clone repository
+```cmd
+git clone https://github.com/EricZoop/mqttcasino.git
+cd mqttcasino
+```
+
 Create enviorment
 ```cmd
 python -m venv venv

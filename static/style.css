@@ -21,7 +21,7 @@ body {
     align-items: center;
     min-height: 100vh;
     margin: 0;
-    padding: 2rem 0; 
+    padding: 0 2rem ; 
 }
 
 .container {
@@ -31,13 +31,12 @@ body {
     box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
     border-radius: 3px;
     padding: 2rem;
-    width: 90%;
-    max-width: 900px;
+    width: 100%;
+    max-width: 1200px;
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
     text-align: center;
-    animation: fadeIn 1s ease-in-out;
 }
 
 /* 2-Column Layout */
@@ -63,8 +62,9 @@ h1 {
     font-size: 2rem;
     font-weight: 700;
     color: var(--accent);
-    letter-spacing: 1px;
+    letter-spacing: 0px;
     text-align: left;
+    margin: 0;
 }
 
 /* Table Sections */
@@ -136,7 +136,7 @@ button {
 button:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.15);
     transform: translateY(-2px);
-    box-shadow: 0 0 15px rgba(13, 202, 240, 0.5);
+    box-shadow: 0 0 15px rgba(31, 31, 31, 0.5);
 }
 
 button:active:not(:disabled) {
@@ -167,8 +167,8 @@ button:disabled {
 
 /* Deal Button Hover */
 #deal-btn:hover:not(:disabled) {
-    background: #0bb6db;
-    transform: scale(1.03);
+    background: #44de02;
+    transform: scale(1.01);
 }
 
 /* Animations */
