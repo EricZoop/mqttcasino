@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT Message Sender</title>
+    <!-- Link to the CSS file in the 'static' folder -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Link to the JavaScript file, 'defer' makes it load after the HTML -->
+    <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+</head>
+<body>
+    <div class="container">
+        <h1>MQTT Message Sender</h1>
+        <p>Send a message to your Arduino (Topic: <code>{{ MQTT_TOPIC }}</code>)</p>
+
+        <!-- This form will be handled by our JavaScript -->
+        <form id="message-form">
+            <label for="message-input">Message:</label>
+            <input type="text" id="message-input" name="message" placeholder="e.g., 'ON', 'OFF', or 'TOGGLE'" required>
+            <button type="submit" id="submit-button">Send Message</button>
+        </form>
+
+        <!-- This paragraph will show status messages from the JavaScript -->
+        <p id="status-message"></p>
+    </div>
+</body>
+</html>
