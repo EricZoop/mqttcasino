@@ -89,7 +89,7 @@ function updateDisplay(state) {
     document.getElementById('status-message').textContent = state.message;
     
     // Update button states
-    const playing = state.game_status === ' Playing';
+    const playing = state.game_status === 'playing';
     document.getElementById('hit-btn').disabled = !playing;
     document.getElementById('stand-btn').disabled = !playing;
     document.getElementById('deal-btn').disabled = playing;

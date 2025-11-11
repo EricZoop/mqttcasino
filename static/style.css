@@ -19,10 +19,9 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
+    min-height: 100vh;
     margin: 0;
-    padding: 0;
-    overflow: hidden;
+    padding: 2rem 0; 
 }
 
 .container {
@@ -33,12 +32,30 @@ body {
     border-radius: 3px;
     padding: 2rem;
     width: 90%;
-    max-width: 700px;
+    max-width: 900px;
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
     text-align: center;
     animation: fadeIn 1s ease-in-out;
+}
+
+/* 2-Column Layout */
+.main-content {
+    display: flex;
+    gap: 1.5rem;
+    width: 100%;
+}
+
+.game-column {
+    flex: 3; /* Game area takes more space */
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.controls-column {
+    flex: 2; /* Controls area takes less space */
 }
 
 /* Heading */
@@ -47,12 +64,7 @@ h1 {
     font-weight: 700;
     color: var(--accent);
     letter-spacing: 1px;
-}
-
-/* Sub-info Text */
-.game-info {
-    font-size: 1rem;
-    opacity: 0.8;
+    text-align: left;
 }
 
 /* Table Sections */
@@ -65,7 +77,7 @@ h1 {
 }
 
 .hand-section {
-    margin-bottom: 1.5rem;
+    margin-bottom: 0.1rem;
 }
 
 .hand-title {
@@ -74,12 +86,14 @@ h1 {
     font-weight: 600;
     color: var(--accent);
     margin-bottom: 0.5rem;
+    gap: 1rem;
 }
 
 .cards-container {
     display: flex;
     justify-content: center;
     gap: 0.5rem;
+    flex-wrap: wrap; /* Allow cards to wrap if hand is too long */
 }
 
 /* Status Message */
@@ -89,13 +103,19 @@ h1 {
     transition: opacity 0.3s ease;
 }
 
-/* Control Buttons Layout */
+/* --- CHANGE: Rework Button Grid --- */
+/* This now matches your request: 2 cols, 3 rows */
 .controls {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(3, 60px);
+    grid-template-columns: repeat(2, 1fr); /* Two columns */
+    grid-template-rows: repeat(3, 60px); /* Three rows */
     gap: 0.75rem;
+
+    /* This makes the buttons "stick" to the top when you scroll */
+    position: sticky;
+    top: 2rem; /* Matches the body padding */
 }
+/* --- End of Rework --- */
 
 /* Buttons */
 button {
@@ -130,18 +150,20 @@ button:disabled {
     cursor: not-allowed;
 }
 
-/* Specific Button Grid Positions */
+/* --- CHANGE: Re-assign Button Grid Positions --- */
 #hit-btn { grid-column: 1; grid-row: 1; }
 #stand-btn { grid-column: 2; grid-row: 1; }
 #double-btn { grid-column: 1; grid-row: 2; }
 #split-btn { grid-column: 2; grid-row: 2; }
 #deal-btn {
-    grid-column: 1 / span 2;
+    grid-column: 1 / span 2; /* Span across 2 columns */
     grid-row: 3;
     background: var(--accent);
     color: #000;
     font-weight: 700;
 }
+/* --- End of Re-assignment --- */
+
 
 /* Deal Button Hover */
 #deal-btn:hover:not(:disabled) {
@@ -163,9 +185,20 @@ button:disabled {
     h1 {
         font-size: 1.5rem;
     }
+
+    /* Stack the columns on top of each other */
+    .main-content {
+        flex-direction: column;
+    }
+
+    /* On mobile, un-stick the controls and adjust row height */
     .controls {
         grid-template-rows: repeat(3, 50px);
+        position: static; /* Un-stick on mobile */
     }
+
+    /* Button positions are already correct, so no change needed here */
+
     button {
         font-size: 1rem;
     }

@@ -4,56 +4,52 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blackjack Game</title>
-    <!-- Link to the external CSS file -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="container">
         <h1>MQTT Casino</h1>
-        
-        <div class="game-info">
-            Get as close to 21 as possible without going over!
-        </div>
 
-        <div class="game-table">
-            <!-- Dealer Section -->
-            <div class="hand-section dealer-section">
-                <div class="hand-title">
-                    <span>Dealer's Hand</span>
-                    <span class="hand-value" id="dealer-value">0</span>
+        <div class="main-content">
+            
+            <div class="game-column">
+                <div class="game-table">
+                    <div class="hand-section dealer-section">
+                        <div class="hand-title">
+                            <span>Dealer's Hand</span>
+                            <span class="hand-value" id="dealer-value">0</span>
+                        </div>
+                        <div class="cards-container" id="dealer-cards">
+                            </div>
+                    </div>
+
+                    <div id="player-sections-container">
+                        <div class="hand-title">
+                            <span>Your Hand(s)</span>
+                        </div>
+                        <div id="player-hands-display">
+                            </div>
+                    </div>
                 </div>
-                <div class="cards-container" id="dealer-cards">
-                    <!-- Cards will be inserted here -->
+
+                <div class="status-message" id="status-message">
+                    Press "Deal" to start a new game
                 </div>
             </div>
 
-            <!-- Player Section Container -->
-            <div id="player-sections-container">
-                <div class="hand-title">
-                    <span>Your Hand(s)</span>
-                </div>
-                <!-- This div will hold all player hands -->
-                <div id="player-hands-display">
-                    <!-- Player hands will be inserted here -->
+            <div class="controls-column">
+                <div class="controls">
+                    <button id="deal-btn" onclick="deal()">Deal</button>
+                    <button id="hit-btn" onclick="hit()" >Hit</button>
+                    <button id="stand-btn" onclick="stand()" disabled>Stand</button>
+                    <button id="double-btn" onclick="doubleDown()" disabled>Double</button>
+                    <button id="split-btn" onclick="split()" disabled>Split</button>
                 </div>
             </div>
         </div>
 
-        <div class="status-message" id="status-message">
-            Press "Deal" to start a new game
-        </div>
-
-        <div class="controls">
-            <button id="deal-btn" onclick="deal()">Deal</button>
-            <button id="hit-btn" onclick="hit()" disabled>Hit</button>
-            <button id="stand-btn" onclick="stand()" disabled>Stand</button>
-            <button id="double-btn" onclick="doubleDown()" disabled>Double</button>
-            <button id="split-btn" onclick="split()" disabled>Split</button>
-        </div>
     </div>
 
-    <!-- Link to the external JavaScript file -->
-    <!-- 'defer' ensures the script runs after the HTML is parsed -->
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>
 </body>
 </html>
