@@ -1,5 +1,5 @@
 import paho.mqtt.client as mqtt
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 import time
 import random
 import threading
@@ -7,135 +7,414 @@ import threading
 # --- MQTT Configuration ---
 MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
-MQTT_TOPIC = "ece508/blackjack_table1"ano
+MQTT_TOPIC = "ece508/blackjack_table1"
 
 # --- App Configuration ---
 app = Flask(__name__)
-mqtt_client = mqtt.Client("flask_publisher_" + str(time.time()))
+mqtt_client = mqtt.Client("flask_blackjack_" + str(time.time()))
 
-# --- Card Deck Configuration ---
-# All the card *ranks* in a single deck.
-CARD_CHARACTERS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2']
-# Set how many decks are in the shoe
+# --- Card Configuration ---
+CARD_RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2']
+CARD_VALUES = {
+    'A': 11, 'K': 10, 'Q': 10, 'J': 10, 'T': 10,
+    '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2
+}
 NUMBER_OF_DECKS = 6
+BASE_BET = 10 # Base bet for calculations
 
-# --- Global state for the shoe and thread control ---
+# --- Game State ---
+game_state = {}
 current_shoe = []
-shoe_lock = threading.Lock() # Protects access to the current_shoe list
-sending_active = False
-sender_thread = None
+shoe_lock = threading.Lock()
+
+def reset_game_state():
+    """Helper to initialize or reset the game state"""
+    global game_state
+    game_state = {
+        'player_hands': [], # List of hand objects: {'hand': [], 'value': 0, 'status': 'playing', 'bet': 10}
+        'active_hand_index': -1, # -1 means no active hand (game not started)
+        'dealer_hand': [],
+        'dealer_value': 0,
+        'dealer_hidden': True,
+        'game_status': 'waiting',  # waiting, playing, dealer_turn, complete
+        'message': 'Press "Deal" to start a new game',
+        'can_split': False,
+        'can_double': False,
+        'base_bet': BASE_BET
+    }
+
+def calculate_hand_value(hand):
+    """Calculate the value of a hand, adjusting for aces"""
+    value = 0
+    aces = 0
+    
+    for card in hand:
+        value += CARD_VALUES[card]
+        if card == 'A':
+            aces += 1
+    
+    # Adjust for aces
+    while value > 21 and aces > 0:
+        value -= 10
+        aces -= 1
+    
+    return value
 
 def build_shoe():
-    """
-    Creates a new, shuffled shoe based on the deck configuration.
-    This function is thread-safe.
-    """
+    """Creates a new, shuffled shoe"""
     global current_shoe
-    # A standard deck has 4 suits, so 4 of each card character
-    one_deck = CARD_CHARACTERS * 4
+    one_deck = CARD_RANKS * 4
     
     with shoe_lock:
         current_shoe = one_deck * NUMBER_OF_DECKS
         random.shuffle(current_shoe)
-        print(f"--- SHOE CREATED ---")
-        print(f"Decks: {NUMBER_OF_DECKS}")
-        print(f"Cards per deck: {len(one_deck)}")
-        print(f"Total cards in shoe: {len(current_shoe)}")
+        print(f"Shoe created with {len(current_shoe)} cards")
 
-def message_sender_loop():
-    """A loop that sends one card from the shoe every 1 sec."""
-    global sending_active, current_shoe
-    print("Background thread started.")
+def deal_card():
+    """Deal a single card from the shoe"""
+    global current_shoe
     
-    char_to_send = None
-    shoe_was_empty = False
-    cards_remaining = 0
+    with shoe_lock:
+        if not current_shoe:
+            print("Shoe empty, rebuilding...")
+            build_shoe()
+        
+        card = current_shoe.pop()
+        return card
 
-    while sending_active:
-        with shoe_lock:
-            if not current_shoe: # Check if shoe is empty
-                print("--- SHOE EMPTY, SENDING RESET AND RESHUFFLING ---")
-                char_to_send = '0' # Send reset signal
-                shoe_was_empty = True
-                
-                # Rebuild and shuffle the shoe
-                one_deck = CARD_CHARACTERS * 4
-                current_shoe = one_deck * NUMBER_OF_DECKS
-                random.shuffle(current_shoe)
-            else:
-                # Get the next card if shoe is not empty
-                char_to_send = current_shoe.pop()
-                shoe_was_empty = False
-            
-            cards_remaining = len(current_shoe)
-
-        # --- Actions performed outside the lock to avoid blocking ---
-        
-        # Publish to MQTT
-        mqtt_client.publish(MQTT_TOPIC, char_to_send)
-        
-        if shoe_was_empty:
-            print(f"Published '0' (RESET). Shoe reshuffled with {cards_remaining} cards.")
-        else:
-            print(f"Published: {char_to_send} (Shoe remaining: {cards_remaining})")
-        
-        # Wait for 1 second
-        time.sleep(1)
-        
-    print("Background thread stopped.")
+def send_to_arduino(message):
+    """Send a message to Arduino via MQTT and print the revealed card"""
+    try:
+        mqtt_client.publish(MQTT_TOPIC, message)
+        print(f"Card revealed on table: {message}")
+    except Exception as e:
+        print(f"MQTT publish error: {e}")
 
 def setup_mqtt_client():
-    """Connects the global client and starts its network loop."""
+    """Connects the MQTT client"""
     try:
         mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
-        mqtt_client.loop_start() 
+        mqtt_client.loop_start()
         print("MQTT Client Connected.")
     except Exception as e:
         print(f"MQTT connection failed: {e}")
 
+def update_hand_options():
+    """Updates can_split and can_double for the active hand."""
+    if game_state['game_status'] != 'playing' or game_state['active_hand_index'] == -1:
+        game_state['can_split'] = False
+        game_state['can_double'] = False
+        return
+
+    active_hand = game_state['player_hands'][game_state['active_hand_index']]
+    
+    # Can only split/double on the first two cards
+    if len(active_hand['hand']) == 2:
+        game_state['can_double'] = True
+        # Can split if ranks (values) are the same
+        game_state['can_split'] = CARD_VALUES[active_hand['hand'][0]] == CARD_VALUES[active_hand['hand'][1]]
+    else:
+        game_state['can_double'] = False
+        game_state['can_split'] = False
+
+def move_to_next_hand():
+    """Moves focus to the next hand, or triggers dealer's turn if all hands are played."""
+    global game_state
+    
+    game_state['active_hand_index'] += 1
+    
+    if game_state['active_hand_index'] < len(game_state['player_hands']):
+        # There is another hand to play
+        active_hand = game_state['player_hands'][game_state['active_hand_index']]
+        
+        # Check for blackjack on this new hand (can happen after split)
+        if active_hand['value'] == 21 and len(active_hand['hand']) == 2:
+            active_hand['status'] = 'blackjack'
+            game_state['message'] = f"Hand {game_state['active_hand_index'] + 1} has Blackjack!"
+            move_to_next_hand() # Recursively move to the next
+        else:
+            active_hand['status'] = 'playing'
+            game_state['message'] = f"Your turn for Hand {game_state['active_hand_index'] + 1}"
+            update_hand_options()
+            
+    else:
+        # All player hands are finished, time for dealer
+        game_state['game_status'] = 'dealer_turn'
+        game_state['can_split'] = False
+        game_state['can_double'] = False
+        game_state['message'] = "Dealer's turn..."
+        dealer_plays()
+
+def dealer_plays():
+    """Logic for the dealer's turn."""
+    global game_state
+    
+    game_state['dealer_hidden'] = False
+    send_to_arduino(game_state['dealer_hand'][0]) # Reveal hidden card
+    
+    # Dealer hits until 17 or higher
+    while game_state['dealer_value'] < 17:
+        time.sleep(1.0) # Small delay for drama
+        new_card = deal_card()
+        game_state['dealer_hand'].append(new_card)
+        game_state['dealer_value'] = calculate_hand_value(game_state['dealer_hand'])
+        send_to_arduino(new_card)
+    
+    determine_winners()
+
+def determine_winners():
+    """Compares all player hands to the dealer's hand."""
+    global game_state
+    
+    dealer_val = game_state['dealer_value']
+    dealer_bust = dealer_val > 21
+    final_messages = []
+    
+    for i, p_hand in enumerate(game_state['player_hands']):
+        hand_num = i + 1
+        
+        if p_hand['status'] == 'bust':
+            p_hand['status'] = 'lose'
+            final_messages.append(f"Hand {hand_num} busts")
+        
+        elif p_hand['status'] == 'blackjack':
+            if game_state['dealer_value'] == 21 and len(game_state['dealer_hand']) == 2:
+                p_hand['status'] = 'tie'
+                final_messages.append(f"Hand {hand_num} pushes (Blackjack)")
+            else:
+                p_hand['status'] = 'win'
+                final_messages.append(f"Hand {hand_num} WINS (Blackjack!)")
+        
+        elif p_hand['status'] == 'stood':
+            hand_val = p_hand['value']
+            if dealer_bust:
+                p_hand['status'] = 'win'
+                final_messages.append(f"Hand {hand_num} wins (Dealer busts)")
+            elif hand_val > dealer_val:
+                p_hand['status'] = 'win'
+                final_messages.append(f"Hand {hand_num} wins")
+            elif hand_val < dealer_val:
+                p_hand['status'] = 'lose'
+                final_messages.append(f"Hand {hand_num} loses")
+            else:
+                p_hand['status'] = 'tie'
+                final_messages.append(f"Hand {hand_num} pushes")
+    
+    game_state['game_status'] = 'complete'
+    game_state['message'] = ". ".join(final_messages) + ". Press 'Deal' to play again."
+
+
 @app.route('/')
 def index():
-    """Render the main HTML page."""
-    # This assumes you have a 'templates/index.html' file
-    return render_template('index.html')
+    """Render the main game page"""
+    # Note: You will need a 'blackjack.html' in a 'templates' folder
+    # for this to work.
+    return render_template('blackjack.html') 
 
-@app.route('/start', methods=['POST'])
-def start_sending():
-    """API endpoint to start the message loop."""
-    global sending_active, sender_thread
+@app.route('/deal', methods=['POST'])
+def deal():
+    """Start a new game by dealing initial cards"""
+    global game_state
     
-    if not sending_active:
-        print("START signal received.")
-        
-        # --- NEW: Send initial '0' to reset clients ---
-        print("Sending initial '0' RESET signal.")
-        mqtt_client.publish(MQTT_TOPIC, '0')
-        # --- END NEW ---
-        
-        build_shoe() # Create and shuffle the shoe *after* reset
-        
-        sending_active = True
-        # We set daemon=True so the thread automatically exits when the app quits
-        sender_thread = threading.Thread(target=message_sender_loop, daemon=True)
-        sender_thread.start()
-        
-    return jsonify({"status": "started"})
+    reset_game_state() # Clear old state
+    
+    # Create first player hand
+    game_state['player_hands'] = [{
+        'hand': [], 
+        'value': 0, 
+        'status': 'playing', 
+        'bet': game_state['base_bet']
+    }]
+    game_state['active_hand_index'] = 0
+    game_state['game_status'] = 'playing'
 
-@app.route('/stop', methods=['POST'])
-def stop_sending():
-    """API endpoint to stop the message loop."""
-    global sending_active
+    # Deal initial cards
+    card1 = deal_card() # Player 1
+    card2 = deal_card() # Dealer Hidden
+    card3 = deal_card() # Player 2
+    card4 = deal_card() # Dealer Up
     
-    if sending_active:
-        sending_active = False
-        print("STOP signal received.")
+    active_hand = game_state['player_hands'][0]
+    
+    active_hand['hand'].append(card1)
+    send_to_arduino(card1)
+    
+    game_state['dealer_hand'].append(card2)
+    # NOT sent
+    
+    active_hand['hand'].append(card3)
+    send_to_arduino(card3)
+    
+    game_state['dealer_hand'].append(card4)
+    send_to_arduino(card4)
+    
+    # Calculate values
+    active_hand['value'] = calculate_hand_value(active_hand['hand'])
+    game_state['dealer_value'] = calculate_hand_value(game_state['dealer_hand'])
+    
+    # Check for player blackjack
+    if active_hand['value'] == 21:
+        active_hand['status'] = 'blackjack'
+        game_state['message'] = "Blackjack! Let's see what the dealer has..."
+        # Don't move to next hand yet, dealer_plays will handle it
+        game_state['active_hand_index'] = -1 # Mark as no hand active
+        dealer_plays()
+    else:
+        game_state['message'] = "Your turn for Hand 1"
+        update_hand_options()
+    
+    return jsonify(game_state)
+
+@app.route('/hit', methods=['POST'])
+def hit():
+    """Player hits - deal another card"""
+    global game_state
+    
+    if game_state['game_status'] != 'playing':
+        return jsonify({'error': 'Game not in progress'}), 400
+    
+    active_hand = game_state['player_hands'][game_state['active_hand_index']]
+
+    # Deal card to player (REVEALED)
+    new_card = deal_card()
+    active_hand['hand'].append(new_card)
+    active_hand['value'] = calculate_hand_value(active_hand['hand'])
+    
+    send_to_arduino(new_card)
+    
+    # After hitting, you can't double or split
+    game_state['can_double'] = False
+    game_state['can_split'] = False
+    
+    # Check for bust
+    if active_hand['value'] > 21:
+        active_hand['status'] = 'bust'
+        game_state['message'] = f"Hand {game_state['active_hand_index'] + 1} busts!"
+        move_to_next_hand()
+    
+    return jsonify(game_state)
+
+@app.route('/stand', methods=['POST'])
+def stand():
+    """Player stands - dealer's turn"""
+    global game_state
+    
+    if game_state['game_status'] != 'playing':
+        return jsonify({'error': 'Game not in progress'}), 400
+    
+    active_hand = game_state['player_hands'][game_state['active_hand_index']]
+    active_hand['status'] = 'stood'
+    
+    game_state['message'] = f"Hand {game_state['active_hand_index'] + 1} stands."
+    move_to_next_hand() # Move to next hand or dealer
+    
+    return jsonify(game_state)
+
+@app.route('/double', methods=['POST'])
+def double_down():
+    """Player doubles down."""
+    global game_state
+    
+    if game_state['game_status'] != 'playing' or not game_state['can_double']:
+        return jsonify({'error': 'Cannot double down now'}), 400
+    
+    active_hand = game_state['player_hands'][game_state['active_hand_index']]
+    
+    # Double the bet
+    active_hand['bet'] *= 2
+    
+    # Deal one card
+    new_card = deal_card()
+    active_hand['hand'].append(new_card)
+    active_hand['value'] = calculate_hand_value(active_hand['hand'])
+    send_to_arduino(new_card)
+    
+    # Turn is over for this hand, must stand
+    game_state['can_double'] = False
+    game_state['can_split'] = False
+    
+    if active_hand['value'] > 21:
+        active_hand['status'] = 'bust'
+        game_state['message'] = f"Hand {game_state['active_hand_index'] + 1} busts on double!"
+    else:
+        active_hand['status'] = 'stood'
+        game_state['message'] = f"Hand {game_state['active_hand_index'] + 1} doubles and stands."
+    
+    move_to_next_hand()
+    return jsonify(game_state)
+
+@app.route('/split', methods=['POST'])
+def split():
+    """Player splits a pair."""
+    global game_state
+    
+    if game_state['game_status'] != 'playing' or not game_state['can_split']:
+        return jsonify({'error': 'Cannot split now'}), 400
         
-    return jsonify({"status": "stopped"})
+    # Get current hand and card to move
+    active_hand = game_state['player_hands'][game_state['active_hand_index']]
+    card_to_move = active_hand['hand'].pop() # e.g., '8'
+    
+    # Create a new hand
+    new_hand = {
+        'hand': [card_to_move],
+        'value': 0,
+        'status': 'pending', # Not active yet
+        'bet': game_state['base_bet']
+    }
+    
+    # Insert new hand *after* the current one
+    game_state['player_hands'].insert(game_state['active_hand_index'] + 1, new_hand)
+    
+    # Deal one new card to each hand
+    new_card_1 = deal_card()
+    active_hand['hand'].append(new_card_1)
+    active_hand['value'] = calculate_hand_value(active_hand['hand'])
+    send_to_arduino(new_card_1)
+    
+    time.sleep(0.5) # small delay
+    
+    new_card_2 = deal_card()
+    new_hand['hand'].append(new_card_2)
+    new_hand['value'] = calculate_hand_value(new_hand['hand'])
+    send_to_arduino(new_card_2)
+    
+    # Special rule: If splitting Aces, you only get one card each and must stand
+    is_ace_split = (CARD_VALUES[active_hand['hand'][0]] == 11)
+    
+    if is_ace_split:
+        active_hand['status'] = 'stood'
+        new_hand['status'] = 'stood'
+        game_state['message'] = "Split Aces! Each hand gets one card."
+        # Don't move_to_next_hand() here, let the first hand be handled
+        # by the main logic. Instead, just update options.
+    
+    # Update options for the *current* active hand
+    update_hand_options()
+    
+    # Check for blackjack on the *first* hand
+    if not is_ace_split and active_hand['value'] == 21:
+        active_hand['status'] = 'blackjack' # Technically not "blackjack" but 21
+        # We will stand on it automatically in this logic
+        move_to_next_hand()
+    elif is_ace_split:
+         # Both hands stood, move to the *next* hand (which will be the new split hand)
+         # This is a bit complex, let's just stand on the first and let move_to_next_hand handle it
+         active_hand['status'] = 'stood'
+         move_to_next_hand() # This will move to the second Ace hand, which is also 'stood'
+    else:
+        game_state['message'] = f"Split! Your turn for Hand {game_state['active_hand_index'] + 1}"
+
+    return jsonify(game_state)
+
+
+@app.route('/state', methods=['GET'])
+def get_state():
+    """Get current game state"""
+    return jsonify(game_state)
 
 if __name__ == '__main__':
+    reset_game_state() # Initialize state on start
+    build_shoe()
     setup_mqtt_client()
-    # Setting debug=False is important for production and ensures
-    # the app doesn't restart, which would mess with the thread.
-    # Using 'allow_unsafe_werkzeug=True' is for development to run with debug.
-    # For a real deployment, use a production server like Gunicorn.
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)

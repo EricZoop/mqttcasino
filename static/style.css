@@ -1,69 +1,225 @@
+/* Import Google Inter font */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+/* Root Variables for Colors and Shadows */
+:root {
+    --bg-dark: #0d1117;
+    --glass: rgba(255, 255, 255, 0.05);
+    --accent: #e9e9e9;
+    --text: #f0f0f0;
+    --card-bg: rgba(255, 255, 255, 0.1);
+    --blur: blur(15px);
+}
+
+/* General Page Styles */
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background-color: #f4f4f9;
-    color: #333;
+    font-family: 'Inter', sans-serif;
+    background: radial-gradient(circle at center, #0a0f14 0%, #000 100%);
+    color: var(--text);
     display: flex;
     justify-content: center;
     align-items: center;
     height: 100vh;
     margin: 0;
+    padding: 0;
+    overflow: hidden;
 }
 
 .container {
-    background: #fff;
-    padding: 2rem 3rem;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    text-align: center;
-}
-
-h1 {
-    color: #111;
-    margin-top: 0;
-}
-
-p {
-    font-size: 1.1rem;
-    color: #555;
-}
-
-.button-group {
-    margin: 2rem 0;
+    backdrop-filter: var(--blur);
+    background: var(--glass);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+    border-radius: 3px;
+    padding: 2rem;
+    width: 90%;
+    max-width: 700px;
     display: flex;
-    gap: 1rem;
+    flex-direction: column;
+    gap: 1.5rem;
+    text-align: center;
+    animation: fadeIn 1s ease-in-out;
 }
 
-button {
+/* Heading */
+h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 1px;
+}
+
+/* Sub-info Text */
+.game-info {
     font-size: 1rem;
-    padding: 0.8rem 1.5rem;
+    opacity: 0.8;
+}
+
+/* Table Sections */
+.game-table {
+    background: var(--card-bg);
+    border-radius: 3px;
+    padding: 1rem;
+    backdrop-filter: var(--blur);
+    box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.05);
+}
+
+.hand-section {
+    margin-bottom: 1.5rem;
+}
+
+.hand-title {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+}
+
+.cards-container {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+/* Status Message */
+.status-message {
+    font-size: 1.1rem;
+    opacity: 0.9;
+    transition: opacity 0.3s ease;
+}
+
+/* Control Buttons Layout */
+.controls {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(3, 60px);
+    gap: 0.75rem;
+}
+
+/* Buttons */
+button {
+    font-family: inherit;
+    font-size: 1.1rem;
+    font-weight: 600;
     border: none;
-    border-radius: 5px;
+    border-radius: 3px;
     cursor: pointer;
-    transition: background-color 0.2s ease;
-    flex: 1; /* Make buttons share space */
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
+    transition: all 0.25s ease;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
 }
 
-#start-button {
-    background-color: #28a745;
-    color: white;
+/* Hover & Active Animations */
+button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 0 15px rgba(13, 202, 240, 0.5);
 }
 
-#start-button:hover {
-    background-color: #218838;
+button:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 0 10px rgba(13, 202, 240, 0.3);
 }
 
-#stop-button {
-    background-color: #dc3545;
-    color: white;
+/* Disabled state */
+button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
-#stop-button:hover {
-    background-color: #c82333;
+/* Specific Button Grid Positions */
+#hit-btn { grid-column: 1; grid-row: 1; }
+#stand-btn { grid-column: 2; grid-row: 1; }
+#double-btn { grid-column: 1; grid-row: 2; }
+#split-btn { grid-column: 2; grid-row: 2; }
+#deal-btn {
+    grid-column: 1 / span 2;
+    grid-row: 3;
+    background: var(--accent);
+    color: #000;
+    font-weight: 700;
 }
 
-#status-message {
-    font-size: 1.2rem;
-    font-weight: bold;
-    margin-top: 1.5rem;
-    color: #666; /* Default idle color */
+/* Deal Button Hover */
+#deal-btn:hover:not(:disabled) {
+    background: #0bb6db;
+    transform: scale(1.03);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsive */
+@media (max-width: 500px) {
+    .container {
+        padding: 1.2rem;
+    }
+    h1 {
+        font-size: 1.5rem;
+    }
+    .controls {
+        grid-template-rows: repeat(3, 50px);
+    }
+    button {
+        font-size: 1rem;
+    }
+}
+
+/* https://www.flaticon.com/authors/md-tanvirul-haque */
+
+.card {
+    width: 70px;
+    height: 100px;
+    border-radius: 0px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 10px;
+}
+
+.card-hidden {
+    background: linear-gradient(145deg, #0dcaf0, #0a8eb5);
+}
+
+.card-enter {
+    animation: cardFadeIn 0.4s ease forwards;
+}
+
+@keyframes cardFadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+
+/* Make player hands display side by side when split */
+#player-hands-display {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap; /* allows it to wrap if screen is small */
+}
+
+/* Make each individual hand smaller and nicely spaced */
+.player-hand {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 140px;
 }
