@@ -15,6 +15,7 @@ mqtt_client = mqtt.Client("flask_blackjack_" + str(time.time()))
 
 # --- Card Configuration ---
 CARD_RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2']
+CARD_SUITS = ['H', 'D', 'C', 'S'] # Added suits
 CARD_VALUES = {
     'A': 11, 'K': 10, 'Q': 10, 'J': 10, 'T': 10,
     '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2
@@ -48,9 +49,10 @@ def calculate_hand_value(hand):
     value = 0
     aces = 0
     
-    for card in hand:
-        value += CARD_VALUES[card]
-        if card == 'A':
+    for card in hand: # card is now 'AH', 'KS', etc.
+        rank = card[:-1] # Get 'A' from 'AH'
+        value += CARD_VALUES[rank]
+        if rank == 'A':
             aces += 1
     
     # Adjust for aces
@@ -63,7 +65,13 @@ def calculate_hand_value(hand):
 def build_shoe():
     """Creates a new, shuffled shoe"""
     global current_shoe
-    one_deck = CARD_RANKS * 4
+    
+    # --- MODIFIED: Build full decks with suits ---
+    one_deck = []
+    for suit in CARD_SUITS:
+        for rank in CARD_RANKS:
+            one_deck.append(f"{rank}{suit}") # e.g., "AH", "KH", "2S"
+    # --- END MODIFICATION ---
     
     with shoe_lock:
         current_shoe = one_deck * NUMBER_OF_DECKS
@@ -75,8 +83,9 @@ def deal_card():
     global current_shoe
     
     with shoe_lock:
-        if not current_shoe:
-            print("Shoe empty, rebuilding...")
+        # Re-shuffle at 25% penetration
+        if len(current_shoe) < (52 * NUMBER_OF_DECKS * 0.25):
+            print("Shoe penetration low, rebuilding...")
             build_shoe()
         
         card = current_shoe.pop()
@@ -111,8 +120,12 @@ def update_hand_options():
     # Can only split/double on the first two cards
     if len(active_hand['hand']) == 2:
         game_state['can_double'] = True
-        # Can split if ranks (values) are the same
-        game_state['can_split'] = CARD_VALUES[active_hand['hand'][0]] == CARD_VALUES[active_hand['hand'][1]]
+        
+        # --- MODIFIED: Check ranks from card string ---
+        rank1 = active_hand['hand'][0][:-1]
+        rank2 = active_hand['hand'][1][:-1]
+        game_state['can_split'] = CARD_VALUES[rank1] == CARD_VALUES[rank2]
+        # --- END MODIFICATION ---
     else:
         game_state['can_double'] = False
         game_state['can_split'] = False
@@ -138,18 +151,39 @@ def move_to_next_hand():
             update_hand_options()
             
     else:
-        # All player hands are finished, time for dealer
-        game_state['game_status'] = 'dealer_turn'
-        game_state['can_split'] = False
-        game_state['can_double'] = False
-        game_state['message'] = "Dealer's turn..."
-        dealer_plays()
+        # All player hands are finished
+        # Check if ALL hands busted - if so, skip dealer's turn
+        all_busted = all(hand['status'] == 'bust' for hand in game_state['player_hands'])
+        
+        if all_busted:
+            # No need for dealer to play
+            game_state['game_status'] = 'complete'
+            game_state['can_split'] = False
+            game_state['can_double'] = False
+            game_state['dealer_hidden'] = False  # Reveal dealer's hole card anyway
+            
+            # Set all hands to 'lose' status
+            final_messages = []
+            for i, p_hand in enumerate(game_state['player_hands']):
+                p_hand['status'] = 'lose'
+                final_messages.append(f"Hand {i + 1} busts")
+            
+            game_state['message'] = ". ".join(final_messages) + ". Press 'Bet' to play again."
+        else:
+            # At least one hand is still in play, dealer must play
+            game_state['game_status'] = 'dealer_turn'
+            game_state['can_split'] = False
+            game_state['can_double'] = False
+            game_state['message'] = "Dealer's turn..."
+            dealer_plays()
 
 def dealer_plays():
     """Logic for the dealer's turn."""
     global game_state
     
     game_state['dealer_hidden'] = False
+    game_state['dealer_value'] = calculate_hand_value(game_state['dealer_hand']) # Recalculate with hole card
+    
     send_to_arduino(game_state['dealer_hand'][0]) # Reveal hidden card
     
     # Dealer hits until 17 or higher
@@ -170,6 +204,9 @@ def determine_winners():
     dealer_bust = dealer_val > 21
     final_messages = []
     
+    # Check for dealer blackjack
+    dealer_has_blackjack = dealer_val == 21 and len(game_state['dealer_hand']) == 2
+    
     for i, p_hand in enumerate(game_state['player_hands']):
         hand_num = i + 1
         
@@ -178,7 +215,7 @@ def determine_winners():
             final_messages.append(f"Hand {hand_num} busts")
         
         elif p_hand['status'] == 'blackjack':
-            if game_state['dealer_value'] == 21 and len(game_state['dealer_hand']) == 2:
+            if dealer_has_blackjack:
                 p_hand['status'] = 'tie'
                 final_messages.append(f"Hand {hand_num} pushes (Blackjack)")
             else:
@@ -201,14 +238,12 @@ def determine_winners():
                 final_messages.append(f"Hand {hand_num} pushes")
     
     game_state['game_status'] = 'complete'
-    game_state['message'] = ". ".join(final_messages) + ". Press 'Deal' to play again."
+    game_state['message'] = ". ".join(final_messages) + ". Press 'Bet' to play again."
 
 
 @app.route('/')
 def index():
     """Render the main game page"""
-    # Note: You will need a 'blackjack.html' in a 'templates' folder
-    # for this to work.
     return render_template('blackjack.html') 
 
 @app.route('/deal', methods=['POST'])
@@ -250,13 +285,13 @@ def deal():
     
     # Calculate values
     active_hand['value'] = calculate_hand_value(active_hand['hand'])
-    game_state['dealer_value'] = calculate_hand_value(game_state['dealer_hand'])
+    # Don't calculate dealer's full value, only show the up card's value
+    game_state['dealer_value'] = CARD_VALUES[card4[:-1]]
     
     # Check for player blackjack
     if active_hand['value'] == 21:
         active_hand['status'] = 'blackjack'
         game_state['message'] = "Blackjack! Let's see what the dealer has..."
-        # Don't move to next hand yet, dealer_plays will handle it
         game_state['active_hand_index'] = -1 # Mark as no hand active
         dealer_plays()
     else:
@@ -290,6 +325,11 @@ def hit():
     if active_hand['value'] > 21:
         active_hand['status'] = 'bust'
         game_state['message'] = f"Hand {game_state['active_hand_index'] + 1} busts!"
+        move_to_next_hand()
+    elif active_hand['value'] == 21:
+        # Auto-stand on 21
+        active_hand['status'] = 'stood'
+        game_state['message'] = f"Hand {game_state['active_hand_index'] + 1} has 21!"
         move_to_next_hand()
     
     return jsonify(game_state)
@@ -353,12 +393,15 @@ def split():
         
     # Get current hand and card to move
     active_hand = game_state['player_hands'][game_state['active_hand_index']]
-    card_to_move = active_hand['hand'].pop() # e.g., '8'
+    card_to_move = active_hand['hand'].pop() # e.g., '8H'
+    
+    # Update value of original hand (now with 1 card)
+    active_hand['value'] = calculate_hand_value(active_hand['hand'])
     
     # Create a new hand
     new_hand = {
         'hand': [card_to_move],
-        'value': 0,
+        'value': calculate_hand_value([card_to_move]),
         'status': 'pending', # Not active yet
         'bet': game_state['base_bet']
     }
@@ -379,31 +422,28 @@ def split():
     new_hand['value'] = calculate_hand_value(new_hand['hand'])
     send_to_arduino(new_card_2)
     
-    # Special rule: If splitting Aces, you only get one card each and must stand
-    is_ace_split = (CARD_VALUES[active_hand['hand'][0]] == 11)
+    # --- MODIFIED: Check rank from card string ---
+    rank1 = active_hand['hand'][0][:-1]
+    is_ace_split = (CARD_VALUES[rank1] == 11)
+    # --- END MODIFICATION ---
     
     if is_ace_split:
+        # Special rule: If splitting Aces, you only get one card each and must stand
         active_hand['status'] = 'stood'
         new_hand['status'] = 'stood'
-        game_state['message'] = "Split Aces! Each hand gets one card."
-        # Don't move_to_next_hand() here, let the first hand be handled
-        # by the main logic. Instead, just update options.
-    
-    # Update options for the *current* active hand
-    update_hand_options()
-    
-    # Check for blackjack on the *first* hand
-    if not is_ace_split and active_hand['value'] == 21:
-        active_hand['status'] = 'blackjack' # Technically not "blackjack" but 21
-        # We will stand on it automatically in this logic
+        game_state['message'] = "Split Aces! Each hand gets one card and stands."
+        # We will move to the next hand, which is also 'stood'
         move_to_next_hand()
-    elif is_ace_split:
-         # Both hands stood, move to the *next* hand (which will be the new split hand)
-         # This is a bit complex, let's just stand on the first and let move_to_next_hand handle it
-         active_hand['status'] = 'stood'
-         move_to_next_hand() # This will move to the second Ace hand, which is also 'stood'
     else:
-        game_state['message'] = f"Split! Your turn for Hand {game_state['active_hand_index'] + 1}"
+        # Update options for the *current* active hand
+        update_hand_options()
+        
+        # Check for blackjack on the *first* hand
+        if active_hand['value'] == 21:
+            active_hand['status'] = 'stood' # Auto-stand on 21
+            move_to_next_hand()
+        else:
+            game_state['message'] = f"Split! Your turn for Hand {game_state['active_hand_index'] + 1}"
 
     return jsonify(game_state)
 

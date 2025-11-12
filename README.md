@@ -23,3 +23,6 @@ Run
 ```cmd
 python app.py
 ```
+
+Pictures From 
+https://www.flaticon.com/packs/playing-cards-15556280
