@@ -534,8 +534,14 @@ def get_state():
     """Get current game state"""
     return jsonify(game_state)
 
+# --- Application Start-up ---
+# These functions MUST run when the file is imported by the
+# PythonAnywhere server, so they must be outside the __name__ block.
+reset_game_state()
+build_shoe()
+setup_mqtt_client()
+
+
 if __name__ == '__main__':
-    reset_game_state()
-    build_shoe()
-    setup_mqtt_client()
+    # This block will now only be used when you run it locally
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
