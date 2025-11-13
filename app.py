@@ -94,7 +94,8 @@ def deal_card():
 def send_to_arduino(message):
     """Send a message to Arduino via MQTT and print the revealed card"""
     try:
-        mqtt_client.publish(MQTT_TOPIC, message)
+        testmessage = mqtt_client.publish(MQTT_TOPIC, message)
+        print(testmessage)
         print(f"Card revealed on table: {message}")
     except Exception as e:
         print(f"MQTT publish error: {e}")
