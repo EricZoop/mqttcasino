@@ -1,20 +1,20 @@
 /* Import Google Inter font */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
 
-/* Root Variables for Colors and Shadows */
+/* Root Variables */
 :root {
-    /* MODIFIED: Changed solid colors to transparent glass values */
-    --glass: rgba(40, 55, 65, 0.25); /* Was #213743 */
+    --glass: rgba(40, 55, 65, 0.25);
     --accent: #eee;
     --text: #eee;
-    --card-bg: rgba(15, 33, 46, 0.3); /* Was #0f212e */
+    --card-bg: rgba(15, 33, 46, 0.3);
     --blur: blur(15px);
+    --green: #00e701;
+    --green-hover: #00c000;
 }
 
 /* General Page Styles */
 body {
     font-family: 'Inter', sans-serif;
-    /* This gradient is important for the glass effect to show through */
     background: linear-gradient(180deg, rgb(15, 15, 15), rgb(29, 31, 33));
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
     color: var(--text);
@@ -23,7 +23,7 @@ body {
     align-items: center;
     min-height: 100vh;
     margin: 0;
-    padding: 0 2rem ; 
+    padding: 0 2rem; 
 }
 
 hr {
@@ -31,14 +31,12 @@ hr {
     height: 3px;
     background-color: rgba(247, 247, 247, 0.123);
     margin: 20px 0;
-  }
+}
 
 .container {
     backdrop-filter: var(--blur);
     background: var(--glass);
-    /* MODIFIED: Brighter border for the "light white" look */
     border: 1px solid rgba(255, 255, 255, 0.2); 
-
     border-radius: 3px;
     padding: 2rem;
     width: 100%;
@@ -46,7 +44,79 @@ hr {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
-    text-align: center;
+}
+
+/* Header Row */
+.header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+h1 {
+    font-size: 3rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0px;
+    margin: 0;
+}
+
+/* Info Display */
+.info-display {
+    display: flex;
+    gap: 1rem;
+}
+
+/* Bank Display */
+.bank-display {
+    background: var(--card-bg);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 0.75rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.bank-label {
+    font-size: 0.85rem;
+    opacity: 0.7;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.bank-amount {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--green);
+}
+
+/* Cards Display */
+.cards-display {
+    background: var(--card-bg);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 0.75rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.cards-label {
+    font-size: 0.85rem;
+    opacity: 0.7;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.cards-amount {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #60a5fa;
 }
 
 /* 2-Column Layout */
@@ -54,65 +124,64 @@ hr {
     display: flex;
     gap: 1.5rem;
     width: 100%;
+    align-items: flex-start;
 }
 
 .game-column {
-    flex: 3; /* Game area takes more space */
+    flex: 3;
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
 }
 
 .controls-column {
-    flex: 2; /* Controls area takes less space */
+    flex: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    height: 100%;
 }
 
-/* Heading */
-h1 {
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--accent);
-    letter-spacing: 0px;
-    text-align: left;
-    margin: 0;
-}
-
-/* Table Sections */
+/* Game Table */
 .game-table {
     background: var(--card-bg);
     border-radius: 3px;
     padding: 1rem;
-    /* ADDED: Inner blur and border */
     backdrop-filter: blur(5px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: inset 0 0 10px rgba(8, 8, 8, 0.05);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
-
-
 
 .hand-section {
-    margin-top: .5rem;
+    margin-top: 0rem;
 }
 
-#dealer-section {
-gap: .5rem;
+.hand-value {
+    margin-bottom: 0rem;
 }
 
 .hand-title {
     display: flex;
     justify-content: space-between;
-
     color: var(--accent);
     margin-top: .5rem;
     gap: 1rem;
+}
 
+.hand-bet {
+    font-weight: 600;
+    color: var(--green);
 }
 
 .cards-container {
     display: flex;
     justify-content: center;
     gap: 0.5rem;
-    flex-wrap: wrap; /* Allow cards to wrap if hand is too long */
+    flex-wrap: wrap;
+    margin-top: .5rem;
 }
 
 /* Status Message */
@@ -122,28 +191,87 @@ gap: .5rem;
     transition: opacity 0.3s ease;
 }
 
-/* --- CHANGE: Rework Button Grid --- */
+/* Bet Control */
+.bet-control {
+    background: var(--card-bg);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.bet-control label {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.bet-input-row {
+    display: grid;
+    grid-template-columns: 1fr repeat(3, 60px);
+    gap: 0.5rem;
+}
+
+#bet-input {
+    font-family: inherit;
+    font-size: 1.1rem;
+    font-weight: 600;
+    background: rgba(47, 69, 82, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 0.5rem 0.75rem;
+    text-align: center;
+}
+
+#bet-input:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.bet-quick {
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    background: rgba(47, 69, 82, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.bet-quick:hover:not(:disabled) {
+    background: rgba(47, 69, 82, 0.6);
+    transform: translateY(-1px);
+}
+
+.bet-quick:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Game Controls */
 .controls {
     display: grid;
-    grid-template-columns: repeat(2, 1fr); /* Two columns */
-    grid-template-rows: repeat(3, 60px); /* Three rows */
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(4, 60px);
     gap: 0.75rem;
-    position: sticky;
-    top: 2rem; /* Matches the body padding */
 }
-/* --- End of Rework --- */
 
 /* Buttons */
 button {
     font-family: inherit;
     font-size: 1.1rem;
     font-weight: 600;
-    /* MODIFIED: Added light border */
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 6px;
     cursor: pointer;
-    /* MODIFIED: Changed solid color to transparent */
-    background: rgba(47, 69, 82, 0.4); /* Was #2f4552 */
+    background: rgba(47, 69, 82, 0.4);
     color: #eee; 
     display: flex;
     align-items: center;
@@ -154,7 +282,6 @@ button {
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
 }
 
-/* SVG inside button */
 button svg {
     width: 1.2em;
     height: 1.2em;
@@ -162,11 +289,9 @@ button svg {
     transition: color 0.25s ease, transform 0.25s ease;
 }
 
-/* Hover & Active Animations */
 button:hover:not(:disabled) {
     transform: translateY(-2px);
     box-shadow: 0 0 15px rgba(31, 31, 31, 0.5);
-    /* MODIFIED: Brighter background on hover */
     background: rgba(47, 69, 82, 0.6);
 }
 
@@ -175,13 +300,12 @@ button:active:not(:disabled) {
     box-shadow: 0 0 10px rgba(13, 202, 240, 0.3);
 }
 
-/* Disabled state */
 button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
 }
 
-/* --- Button Positions --- */
+/* Button Positions */
 #hit-btn { grid-column: 1; grid-row: 1; }
 #stand-btn { grid-column: 2; grid-row: 1; }
 #double-btn { grid-column: 1; grid-row: 2; }
@@ -189,75 +313,48 @@ button:disabled {
 #deal-btn {
     grid-column: 1 / span 2;
     grid-row: 3;
-    background: #00e701;
-    color: #000;
+    background: var(--green);
+    color: rgb(12, 12, 12);
     font-weight: 700;
-    /* MODIFIED: Reset border for deal button */
     border: none;
 }
 
-/* --- Hover Color Effects for SVG/Text --- */
-
-/* Hit Button (Yellow) */
-#hit-btn:hover:not(:disabled) {
-    color: #fde047; /* SVG and text turn yellow */
-}
-
-/* Stand Button (Purple) */
-#stand-btn:hover:not(:disabled) {
-    color: #8b5cf6; /* SVG and text turn purple */
-}
-
-/* Split Button (Blue) */
-#split-btn:hover:not(:disabled) {
-    color: #2563eb; /* SVG and text turn blue */
-}
-
-/* Double Button (Orange) */
-#double-btn:hover:not(:disabled) {
-    color: #fb923c; /* SVG and text turn orange */
-}
-
-/* Deal Button (Green) */
+/* Button Hover Colors */
+#hit-btn:hover:not(:disabled) { color: #fde047; }
+#stand-btn:hover:not(:disabled) { color: #8b5cf6; }
+#split-btn:hover:not(:disabled) { color: #2563eb; }
+#double-btn:hover:not(:disabled) { color: #fb923c; }
 #deal-btn:hover:not(:disabled) {
-    background: #00c000;
+    background: var(--green-hover);
     transform: scale(.99);
 }
-/* Animations */
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
+
+/* Shoe Info */
+.shoe-info {
+    background: var(--card-bg);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 1rem;
 }
 
-/* Responsive */
-@media (max-width: 500px) {
-    .container {
-        padding: 1.2rem;
-    }
-    h1 {
-        font-size: 1.5rem;
-    }
-
-    /* Stack the columns on top of each other */
-    .main-content {
-        flex-direction: column;
-    }
-
-    /* On mobile, un-stick the controls and adjust row height */
-    .controls {
-        grid-template-rows: repeat(3, 50px);
-        position: static; /* Un-stick on mobile */
-    }
-
-    /* Button positions are already correct, so no change needed here */
-
-    button {
-        font-size: 1rem;
-    }
+#reset-bank-btn {
+    grid-column: 1 / span 2;
+    grid-row: 4;
+    background: #0077a3; /* Blue from 'shoe cards remaining' */
+    color: #000;
+    font-weight: 700;
+    border: none;
+    font-size: 1.1rem; /* Match other main buttons */
 }
 
-/* https://www.flaticon.com/authors/md-tanvirul-haque */
+#reset-bank-btn:hover:not(:disabled) {
+    background: #034c66; /* Slightly darker blue */
 
+    transform: scale(.99);
+}
+
+/* Cards */
 .card {
     width: 90px;
     height: 120px;
@@ -266,7 +363,6 @@ button:disabled {
     display: flex;
     align-items: center;
     justify-content: center;
-    /* No default transforms - applied only during animation */
     transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
@@ -277,11 +373,6 @@ button:disabled {
     border-radius: 3px;
 }
 
-.card-hidden {
-    background: linear-gradient(145deg, #0dcaf0, #0a8eb5);
-}
-
-/* Enhanced slide-in animation - faster timing */
 .card-enter {
     animation: cardSlideIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
@@ -300,24 +391,24 @@ button:disabled {
     }
 }
 
-/* Optional: Add a subtle hover effect to cards */
 .card:hover {
     transform: translateY(-5px) scale(1.05);
     transition: transform 0.2s ease;
 }
 
-/* Make player hands display side by side when split */
+
+
+/* Player Hands */
 #player-hands-display {
     display: flex;
     justify-content: center;
     gap: 1rem;
-    flex-wrap: wrap; /* allows it to wrap if screen is small */
+    flex-wrap: wrap;
 }
 
-/* Make each individual hand smaller and nicely spaced */
 .player-hand {
     background: rgba(255, 255, 255, 0);
-    border-radius: 3px;
+    border-radius: 6px;
     padding: 0.5rem;
     display: flex;
     flex-direction: column;
@@ -325,9 +416,44 @@ button:disabled {
     min-width: 140px;
 }
 
-/* Add subtle highlight to active hand */
 .player-hand-active {
     background: rgba(255, 255, 255, 0.1);
     box-shadow: 0 0 0px rgba(255, 255, 255, 0.2);
-    padding: 12px 18px 6px 18px;
+    padding: 12px 18px 12px 18px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .header-row {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+    
+    .main-content {
+        flex-direction: column;
+    }
+    
+    .controls {
+        grid-template-rows: repeat(3, 50px);
+    }
+    
+    .bet-input-row {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto repeat(3, 40px);
+    }
+}
+
+@media (max-width: 500px) {
+    .container {
+        padding: 1.2rem;
+    }
+    
+    h1 {
+        font-size: 1.5rem;
+    }
+    
+    button {
+        font-size: 1rem;
+    }
 }
