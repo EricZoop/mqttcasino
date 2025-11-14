@@ -50,6 +50,7 @@
                <div class="status-message" id="status-message">
                   Place your bet to start
                </div>
+
             </div>
             <div class="controls-column">
                <!-- Bet Control -->
@@ -96,10 +97,22 @@
                   </button>
                </div>
                
-               <!-- Shoe Info & Utility 
-               <div class="shoe-info">
 
-               </div>-->
+               
+               <div class="shoe-info">
+                  <label>MQTT Configuration</label>
+                  <!-- Top row: Broker URL + Port -->
+                  <div class="mqtt-config-row">
+                     <input type="text" id="mqtt-broker" placeholder="Broker" value="broker.hivemq.com" />
+                     <input type="number" id="mqtt-port" placeholder="Port" value="1883" class="port-input" />
+                  </div>
+                  <!-- Bottom row: Topic + Update button -->
+                  <div class="mqtt-config-row">
+                     <input type="text" id="mqtt-topic" placeholder="Topic" value="ece508/blackjack_table1" />
+                     <button id="update-mqtt-btn" onclick="updateMqttConfig()">Update MQTT</button>
+                  </div>
+               </div>
+
             </div>
          </div>
       </div>

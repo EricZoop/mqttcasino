@@ -24,5 +24,5 @@ Run
 python app.py
 ```
 
-Pictures From 
+Card images from 
 https://www.flaticon.com/packs/playing-cards-15556280

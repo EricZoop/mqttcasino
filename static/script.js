@@ -80,6 +80,7 @@ function createPlayerHand(handData, index, isActive, previousHand = null) {
     return handContainer;
 }
 
+
 function updateDisplay(state) {
     if (!state || Object.keys(state).length === 0) {
         console.warn("Received empty or invalid state");
@@ -101,6 +102,8 @@ function updateDisplay(state) {
     const dealerCards = document.getElementById('dealer-cards');
     dealerCards.innerHTML = '';
     
+    const dealerValueElement = document.getElementById('dealer-value');
+    
     if (state.dealer_hand && state.dealer_hand.length > 0) {
         state.dealer_hand.forEach((card, index) => {
             const isNewCard = index >= previousDealerHand.length;
@@ -116,10 +119,12 @@ function updateDisplay(state) {
             }
         });
         
-        document.getElementById('dealer-value').textContent = 
+        dealerValueElement.textContent = 
             state.dealer_hidden ? CARD_VALUES[state.dealer_hand[1].slice(0, -1)] : state.dealer_value;
+        dealerValueElement.style.display = '';  // <-- ADDED: Show the value when cards exist
     } else {
-         document.getElementById('dealer-value').textContent = '0';
+        dealerValueElement.textContent = '0';
+        dealerValueElement.style.display = 'none';  // <-- ADDED: Hide the value when no cards
     }
     
     // Update player's cards
@@ -283,3 +288,40 @@ window.onload = async function() {
         console.error('Error loading state:', error);
     }
 };
+
+async function resetBankAndShuffle() {
+    try {
+        // Reset bank
+        await fetch('/reset_bank', { method: 'POST' });
+        // Shuffle deck
+        const response = await fetch('/shuffle', { method: 'POST' });
+        const state = await response.json();
+        updateDisplay(state);
+    } catch (error) {
+        console.error('Error resetting bank and shuffling:', error);
+    }
+}
+
+async function updateMqttConfig() {
+    try {
+        const broker = document.getElementById('mqtt-broker').value;
+        const port = parseInt(document.getElementById('mqtt-port').value);
+        const topic = document.getElementById('mqtt-topic').value;
+        
+        const response = await fetch('/update_mqtt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ broker, port, topic })
+        });
+        
+        const result = await response.json();
+        if (result.error) {
+            alert(result.error);
+        } else {
+            alert('MQTT configuration updated successfully!');
+        }
+    } catch (error) {
+        console.error('Error updating MQTT config:', error);
+        alert('Error updating MQTT configuration');
+    }
+}
