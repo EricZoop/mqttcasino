@@ -6,7 +6,7 @@
     --glass: rgba(40, 55, 65, 0.25);
     --accent: #eee;
     --text: #eee;
-    --card-bg: rgba(15, 33, 46, 0.3);
+    --card-bg: rgba(15, 33, 46, 0.75);
     --blur: blur(15px);
     --green: #00e701;
     --green-hover: #00c000;
@@ -15,7 +15,7 @@
 /* General Page Styles */
 body {
     font-family: 'Inter', sans-serif;
-    background: linear-gradient(180deg, rgb(15, 15, 15), rgb(29, 31, 33));
+    background: linear-gradient(180deg, rgb(184, 1, 1), rgb(15, 252, 7));
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
     color: var(--text);
     display: flex;
@@ -291,7 +291,7 @@ button {
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 6px;
     cursor: pointer;
-    background: rgba(47, 69, 82, 0.4);
+    background: var(--card-bg);
     color: #eee; 
     display: flex;
     align-items: center;
