@@ -58,14 +58,26 @@ function createPlayerHand(handData, index, isActive, previousHand = null) {
 
     const status = handData.status.charAt(0).toUpperCase() + handData.status.slice(1);
     
+    // Determine bet color class based on hand status
+    let betColorClass = '';
+    let betPrefix = ''; // <-- NEW: Initialize prefix
+    if (handData.status === 'lose' || handData.status === 'bust') {
+        betColorClass = 'bet-loss';
+        betPrefix = '-'; // <-- NEW: Set prefix for loss
+    } else if (handData.status === 'win' || handData.status === 'blackjack') {
+        betColorClass = 'bet-win';
+    }
+    // 'tie' or 'push' status will have no class (stays white)
+    // 'playing', 'stood', 'pending' will also stay white
+    
     handContainer.innerHTML = `
     <span class="hand-value">${handData.value}</span>
         <div class="cards-container" id="player-cards-${index}">
         </div>
         
-        <div class="hand-title">
+        <div style="margin-top: .5rem;">
             
-            <span class="hand-bet">$${handData.bet}</span>
+            <span class="hand-bet ${betColorClass}">${betPrefix}$${handData.bet}</span>
         </div>
     `;
     
@@ -80,6 +92,42 @@ function createPlayerHand(handData, index, isActive, previousHand = null) {
     return handContainer;
 }
 
+/**
+ * Animates the text content of an element from a start value to an end value.
+ * @param {HTMLElement} element - The DOM element to update.
+ * @param {number} start - The starting number.
+ * @param {number} end - The ending number.
+ * @param {number} duration - The animation duration in milliseconds.
+ */
+function animateValue(element, start, end, duration) {
+    // If the value hasn't changed, just set the text and return
+    if (start === end) {
+        element.textContent = `$${end}`;
+        return;
+    }
+
+    let startTime = null;
+
+    const step = (timestamp) => {
+        if (!startTime) startTime = timestamp;
+        const progress = Math.min((timestamp - startTime) / duration, 1);
+        
+        // Calculate the current value based on progress
+        const currentValue = Math.floor(progress * (end - start) + start);
+
+        element.textContent = `$${currentValue}`;
+
+        // Continue animation until progress is 1 (100%)
+        if (progress < 1) {
+            window.requestAnimationFrame(step);
+        } else {
+            // Ensure it ends on the exact final value
+            element.textContent = `$${end}`; 
+        }
+    };
+
+    window.requestAnimationFrame(step);
+}
 
 function updateDisplay(state) {
     if (!state || Object.keys(state).length === 0) {
@@ -93,10 +141,19 @@ function updateDisplay(state) {
     gameState = state;
     
     // Update bank display
-    document.getElementById('bank-amount').textContent = `$${state.bank}`;
+    const bankElement = document.getElementById('bank-amount');
+    const newBankValue = state.bank;
+    
+    // Get the current value from the DOM to animate from
+    const currentText = bankElement.textContent.replace('$', '');
+    // Use newBankValue as fallback if parsing fails (e.g., on first load)
+    const startBankValue = parseInt(currentText) || newBankValue; 
+    
+    // Animate the value over 300 milliseconds
+    animateValue(bankElement, startBankValue, newBankValue, 350);
     
     // Update cards remaining
-    document.getElementById('cards-remaining').textContent = state.cards_remaining || 312;
+    document.getElementById('cards-remaining').textContent = state.cards_remaining;
     
     // Update dealer's cards
     const dealerCards = document.getElementById('dealer-cards');
@@ -150,6 +207,7 @@ function updateDisplay(state) {
     document.getElementById('bet-input').disabled = playing;
     document.querySelectorAll('.bet-quick').forEach(btn => btn.disabled = playing);
     document.getElementById('reset-bank-btn').disabled = playing;
+    document.querySelector('.bet-control').classList.toggle('disabled', playing);
     
     // Enable/disable split and double
     document.getElementById('double-btn').disabled = !state.can_double;
@@ -287,6 +345,7 @@ window.onload = async function() {
     } catch (error) {
         console.error('Error loading state:', error);
     }
+
 };
 
 async function resetBankAndShuffle() {
@@ -302,7 +361,12 @@ async function resetBankAndShuffle() {
     }
 }
 
+
 async function updateMqttConfig() {
+
+    
+    const statusEl = document.getElementById('status-message');
+
     try {
         const broker = document.getElementById('mqtt-broker').value;
         const port = parseInt(document.getElementById('mqtt-port').value);
@@ -316,12 +380,15 @@ async function updateMqttConfig() {
         
         const result = await response.json();
         if (result.error) {
-            alert(result.error);
+            // Use status message instead of alert
+            statusEl.textContent = `MQTT Error: ${result.error}`;
         } else {
-            alert('MQTT configuration updated successfully!');
+            // Use status message instead of alert
+            statusEl.textContent = 'MQTT configuration updated successfully!';
         }
     } catch (error) {
         console.error('Error updating MQTT config:', error);
-        alert('Error updating MQTT configuration');
+        // Use status message instead of alert
+        statusEl.textContent = 'Error updating MQTT configuration';
     }
 }

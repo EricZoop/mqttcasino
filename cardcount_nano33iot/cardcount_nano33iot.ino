@@ -33,7 +33,7 @@ const char webhookPath[] = "/api/webhooks/1434709618071703612/7Amx_ltzl0QsI4aSBa
 //*************************************************************
 const char mqttBroker[] = "broker.hivemq.com";
 const int mqttPort = 1883;
-const char subTopic[] = "ece508/blackjack_table1";
+const char subTopic[] = "ece508/blkjck_table1";
 //*************************************************************
 
 WiFiSSLClient client;
@@ -70,6 +70,92 @@ int cardsDealt = 0;
 // Flags to ensure one-time alerts
 bool hotAlertSent = false;
 bool coldAlertSent = true;  // START "cold" alert as already sent (disarmed)
+
+
+void setup() {
+  //Initialize serial:
+  Serial.begin(9600);
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  Wire.begin();
+
+  // NEW: Initialize the Adafruit OLED
+  if (!myOled.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;); // Don't proceed, loop forever
+  }
+
+  // Clear the buffer
+  myOled.clearDisplay();
+  myOled.display(); // Show initial blank screen
+
+  myOled.setTextSize(1);
+  myOled.setTextColor(SSD1306_WHITE);
+  myOled.setFont(); // Use default Adafruit font
+
+  // Row 1
+  oledline[1] = String(teamNumber) + " ECE508";
+
+  // Initialize all lines
+  int jj; for (jj = 2; jj <= 8; jj++) {
+    oledline[jj] = "";
+  }
+
+  oledline[4] = "Last Card: AKQJT9876";
+  oledline[5] = "Run Count: 0";
+  oledline[6] = "True Count: 0.00";
+  
+  displayTextOLED(oledline);
+
+  // check for the presence of the shield:
+  if (WiFi.status() == WL_NO_SHIELD) {
+    Serial.println("WiFi shield not present");
+    // don't continue:
+    while (true);
+  }
+
+  // attempt to connect to Wifi network:
+  while ( statusWiFi != WL_CONNECTED) {
+    Serial.println("Attempting to connect to SSID: " + String(wifi_ssid));
+    statusWiFi = WiFi.begin(wifi_ssid, wifi_pass);
+  }
+  Serial.println("Connected to WiFi");
+
+  // --- MQTT Setup (NEW) ---
+  Serial.println("Setting up MQTT...");
+  // Set the message callback function
+  mqttClient.onMessage(onMqttMessage);
+  
+  // Connect to the MQTT broker
+  Serial.println("Connecting to MQTT broker...");
+  while (!mqttClient.connect(mqttBroker, mqttPort)) {
+    Serial.println(mqttClient.connectError());
+
+  }
+  Serial.println("Connected to MQTT broker!");
+
+  Serial.print("Subscribing to topic: ");
+  Serial.println(subTopic);
+  if (!mqttClient.subscribe(subTopic)) {
+     Serial.println("Subscription failed!");
+  } else {
+     Serial.println("Subscribed!");
+  }
+
+  // Send Discord connection notification
+  long color;
+  String content;
+  String message;
+
+
+  color = 2483968; // Green
+  content = ""; // Ping Users or Roles
+  message = String("Connected to Discord Server\\n\\n MQTT Configuration: \\n") +
+          "`" + String(mqttBroker) + "` \\n `" + String(mqttPort) + "` \\n `" + String(subTopic) + "`";
+
+
+  sendDiscordNotification(buildJsonPayload(message, color, content));
+}
 
 
 void onMqttMessage(int messageSize) {
@@ -161,13 +247,13 @@ void onMqttMessage(int messageSize) {
   
 
     // Hot alert
-    if (runningCount > 9 && !hotAlertSent) {
+    if (runningCount > 4 && !hotAlertSent) {
       hotAlertSent = true;
       coldAlertSent = false;
 
       color = 16732672; // Red Orange
       content = "<@&1434702820430581892> please join the table.";
-      message = "The running count is __**+10**__! 🔥";
+      message = "The running count is __**+5**__! 🔥";
       sendDiscordNotification(buildJsonPayload(message, color, content)); 
     }
 
@@ -187,92 +273,6 @@ void onMqttMessage(int messageSize) {
   displayTextOLED(oledline); // Refresh the display
 }
 
-void setup() {
-  //Initialize serial:
-  Serial.begin(9600);
-  pinMode(LED_BUILTIN, OUTPUT);
-
-  Wire.begin();
-
-  // NEW: Initialize the Adafruit OLED
-  if (!myOled.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS)) {
-    Serial.println(F("SSD1306 allocation failed"));
-    for (;;); // Don't proceed, loop forever
-  }
-
-  // Clear the buffer
-  myOled.clearDisplay();
-  myOled.display(); // Show initial blank screen
-
-  myOled.setTextSize(1);
-  myOled.setTextColor(SSD1306_WHITE);
-  myOled.setFont(); // Use default Adafruit font
-
-  // Row 1
-  oledline[1] = String(teamNumber) + " ECE508";
-
-  // Initialize all lines
-  int jj; for (jj = 2; jj <= 8; jj++) {
-    oledline[jj] = "";
-  }
-
-  oledline[4] = "Last Card: AKQJT9876";
-  oledline[5] = "Run Count: 0";
-  oledline[6] = "True Count: 0.00";
-  
-  displayTextOLED(oledline);
-
-  // check for the presence of the shield:
-  if (WiFi.status() == WL_NO_SHIELD) {
-    Serial.println("WiFi shield not present");
-    // don't continue:
-    while (true);
-  }
-
-  // attempt to connect to Wifi network:
-  while ( statusWiFi != WL_CONNECTED) {
-    Serial.println("Attempting to connect to SSID: " + String(wifi_ssid));
-    statusWiFi = WiFi.begin(wifi_ssid, wifi_pass);
-  }
-  Serial.println("Connected to WiFi");
-
-  // --- MQTT Setup (NEW) ---
-  Serial.println("Setting up MQTT...");
-  // Set the message callback function
-  mqttClient.onMessage(onMqttMessage);
-  
-  // Connect to the MQTT broker
-  Serial.println("Connecting to MQTT broker...");
-  while (!mqttClient.connect(mqttBroker, mqttPort)) {
-    Serial.println(mqttClient.connectError());
-
-  }
-  Serial.println("Connected to MQTT broker!");
-
-  Serial.print("Subscribing to topic: ");
-  Serial.println(subTopic);
-  if (!mqttClient.subscribe(subTopic)) {
-     Serial.println("Subscription failed!");
-  } else {
-     Serial.println("Subscribed!");
-  }
-
-  // Send Discord connection notification
-  long color;
-  String content;
-  String message;
-
-
-  color = 2483968; // Green
-  content = ""; // Ping Users or Roles
-  message = "Connected to Discord Server";
-
-  sendDiscordNotification(buildJsonPayload(message, color, content));
-}
-
-
-
-
 void loop() {
 
   // MQTT polling
@@ -288,30 +288,34 @@ void loop() {
     oledline[2] = String(tmpBuffer);
 
     // Row 3: SSID
-    oledline[3] = "SSID: " + String(WiFi.SSID());
+    //oledline[3] = "SSID: " + String(WiFi.SSID());
     
-    // Row 7: UTC yyyy-mm-dd hh:mm:ss
-    unsigned long epoch = WiFi.getTime();
-    convCurrentTime(epoch, tmpBuffer);
-    oledline[7] = String(tmpBuffer);
+    // Subrcribed
+    oledline[7] = subTopic;
 
-    // Row 8: Uptime dd hh:mm:ss
-    convDDHHMMSS(millis() / 1000, tmpBuffer);
-    oledline[8] = "Uptime: " + String(tmpBuffer);
+    // Row 8: Uptime hh:mm:ss
+    //convHHMMSS(millis() / 1000, tmpBuffer);
+    //oledline[8] = "Uptime: " + String(tmpBuffer);
 
     displayTextOLED(oledline);
   }
 }
 
 String buildJsonPayload(const String& message, long color, const String& content) {
+  
+
+  convHHMMSS(millis() / 1000, tmpBuffer);
+  String timestampedMessage = message  + "\\n\\n" + "-# Uptime: " + tmpBuffer;
+
   return "{"
          "\"content\":\"" + content + "\","
          "\"embeds\":[{"
-         "\"description\":\"" + message + "\","
+         "\"description\":\"" + timestampedMessage + "\"," // Use the new message
          "\"color\":" + String(color) + ","
          "\"author\":{"
          "\"name\":\"Player1 (Arduino Nano 33 IoT)\","
          "\"icon_url\":\"https://media.discordapp.net/attachments/1435025106564022465/1436926911988105368/zC60TAAAAAZJREFUAwBJUcPv7WJDOgAAAABJRU5ErkJggg.png?ex=69120ab8&is=6910b938&hm=55dfaa1e127e035e815e00293841f1249d3954615cb62c400133f0f4d0860d06&=&format=webp&quality=lossless\""
+  
          "}"
          "}],"
          "\"username\":\"Le Chiffre\","

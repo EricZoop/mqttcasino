@@ -6,7 +6,7 @@ import helpers  # Import our new helpers file
 # --- MQTT Configuration ---
 MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
-MQTT_TOPIC = "ece508/blackjack_table1"
+MQTT_TOPIC = "ece508/blkjck_table1"
 
 # --- App Configuration ---
 app = Flask(__name__)

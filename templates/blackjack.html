@@ -4,19 +4,23 @@
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>MQTT Casino</title>
-      <link
-         rel="stylesheet"
-         href="{{ url_for('static', filename='style.css') }}"
-      />
+      <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+      <link rel="icon" type="image/png" href="{{ url_for('static', filename='crown.png') }}">
    </head>
    <body>
       <div class="container">
          <div class="header-row">
-            <h1>MQTT Casino</h1>
+            <div class="logo-title">
+               <img src="{{ url_for('static', filename='crown.png') }}" class="logo" alt="Logo">
+               <h1>MQTT Casino</h1>
+               <p class="version"> 
+                  <a href="https://github.com/EricZoop/mqttcasino" target="_blank" title="Developed by Eric Zipor, Alex Kim, &amp; Hassan Riaz">v1.0.0</a>
+               </p>
+            </div>
             <div class="info-display">
                <div class="cards-display">
                   <div class="cards-label">Shoe Cards Remaining</div>
-                  <div class="cards-amount" id="cards-remaining">312</div>
+                  <div class="cards-amount" id="cards-remaining">0</div>
                </div>
 
                <div class="bank-display">
@@ -42,7 +46,7 @@
                   <hr />
                   <div id="player-sections-container">
                      <div class="hand-title">
-                        <span>Your Hand(s)</span>
+                        <span>Your Hand</span>
                      </div>
                      <div id="player-hands-display"></div>
                   </div>
@@ -53,6 +57,21 @@
 
             </div>
             <div class="controls-column">
+
+               <div class="shoe-info">
+                  <label>MQTT Configuration</label>
+                  <!-- Top row: Broker URL + Port -->
+                  <div class="mqtt-config-row">
+                     <input type="text" id="mqtt-broker" placeholder="Broker" value="broker.hivemq.com" />
+                     <input type="number" id="mqtt-port" placeholder="Port" value="1883" class="port-input" />
+                  </div>
+                  <!-- Bottom row: Topic + Update button -->
+                  <div class="mqtt-config-row">
+                     <input type="text" id="mqtt-topic" placeholder="Topic" value="ece508/blkjck_table1" />
+                     <button id="update-mqtt-btn" onclick="updateMqttConfig()">Update MQTT</button>
+                  </div>
+               </div>
+
                <!-- Bet Control -->
                <div class="bet-control">
                   <label for="bet-input">Bet Amount</label>
@@ -99,19 +118,7 @@
                
 
                
-               <div class="shoe-info">
-                  <label>MQTT Configuration</label>
-                  <!-- Top row: Broker URL + Port -->
-                  <div class="mqtt-config-row">
-                     <input type="text" id="mqtt-broker" placeholder="Broker" value="broker.hivemq.com" />
-                     <input type="number" id="mqtt-port" placeholder="Port" value="1883" class="port-input" />
-                  </div>
-                  <!-- Bottom row: Topic + Update button -->
-                  <div class="mqtt-config-row">
-                     <input type="text" id="mqtt-topic" placeholder="Topic" value="ece508/blackjack_table1" />
-                     <button id="update-mqtt-btn" onclick="updateMqttConfig()">Update MQTT</button>
-                  </div>
-               </div>
+
 
             </div>
          </div>

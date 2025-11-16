@@ -3,7 +3,7 @@
 #include <time.h>     
 #include <stdio.h>    
 
-void convDDHHMMSS(unsigned long currSeconds, char *uptimeDDHHMMSS) 
+void convHHMMSS(unsigned long currSeconds, char *uptimeDDHHMMSS) 
 {
   int dd, hh, mm, ss;
 
@@ -13,7 +13,7 @@ void convDDHHMMSS(unsigned long currSeconds, char *uptimeDDHHMMSS)
   mm = (ss-(86400*dd)-(3600*hh))/60;
   ss = (ss-(86400*dd)-(3600*hh)-(60*mm));
 
-  sprintf(uptimeDDHHMMSS, "%02d %02d:%02d:%02d", dd, hh ,mm, ss);
+  sprintf(uptimeDDHHMMSS, "%02d:%02d:%02d", hh ,mm, ss);
 };
 
 void convCurrentTime(unsigned long currSeconds, char *timeStr) 

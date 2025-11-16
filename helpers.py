@@ -53,17 +53,23 @@ def calculate_hand_value(hand):
     
     return value
 
-def build_shoe():
-    """Creates a new, shuffled shoe"""
-    global current_shoe
-    
+def _build_shoe_internal():
+    """Internal helper to build shoe without locking"""
     one_deck = []
     for suit in CARD_SUITS:
         for rank in CARD_RANKS:
             one_deck.append(f"{rank}{suit}")
     
+    return one_deck * NUMBER_OF_DECKS
+
+def build_shoe():
+    """Creates a new, shuffled shoe"""
+    global current_shoe
+    
+    new_shoe = _build_shoe_internal()
+    
     with shoe_lock:
-        current_shoe = one_deck * NUMBER_OF_DECKS
+        current_shoe = new_shoe
         random.shuffle(current_shoe)
         print(f"Shoe created with {len(current_shoe)} cards")
 
@@ -75,10 +81,13 @@ def deal_card():
     with shoe_lock:
         if len(current_shoe) < (52 * NUMBER_OF_DECKS * 0.25):
             print("Shoe penetration low, rebuilding...")
-            build_shoe()
+            # Rebuild directly without releasing/reacquiring lock
+            new_shoe = _build_shoe_internal()
+            current_shoe = new_shoe
+            random.shuffle(current_shoe)
+            print(f"Shoe rebuilt with {len(current_shoe)} cards")
         
         card = current_shoe.pop()
-        # Ensure game_state is initialized before trying to access it
         if 'cards_remaining' in game_state:
             game_state['cards_remaining'] = len(current_shoe)
         return card

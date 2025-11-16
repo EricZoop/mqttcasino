@@ -21,7 +21,7 @@ const unsigned char club_bitmap[] PROGMEM    = {0x38,0x38,0xFE,0xFE,0x6C,0x10,0x
 const unsigned char diamond_bitmap[] PROGMEM = {0x10,0x38,0x7C,0xFE,0x7C,0x38,0x10,0x00};
 
 // FUNCTION PROTOTYPES
-void convDDHHMMSS(unsigned long currSeconds, char *uptimeDDHHMMSS);
+void convHHMMSS(unsigned long currSeconds, char *uptimeDDHHMMSS);
 void convCurrentTime(unsigned long currSeconds, char *timeStr);
 void getWiFiRSSI(char *wifiRSSI);
 
