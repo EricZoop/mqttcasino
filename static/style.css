@@ -28,6 +28,7 @@ body {
     margin: 0;
     padding: 5vh 2rem;
     box-sizing: border-box;
+    flex-direction: column;
 }
 
 hr {
@@ -48,6 +49,7 @@ hr {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    margin-top: 3rem;
 }
 
 .header-row {
@@ -66,6 +68,13 @@ hr {
 /* Logo Image */
 .logo {
     height: 64px;   /* adjust as needed */
+    width: auto;
+    object-fit: contain;
+}
+
+.cheatsheet {
+    margin-top: 15rem;
+    height: 1024px;   /* adjust as needed */
     width: auto;
     object-fit: contain;
 }

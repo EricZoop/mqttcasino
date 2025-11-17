@@ -141,8 +141,8 @@ def update_hand_options(session_id):
         
         rank1 = active_hand['hand'][0][:-1]
         rank2 = active_hand['hand'][1][:-1]
-        state['can_split'] = (CARD_VALUES[rank1] == CARD_VALUES[rank2] and 
-                              state['bank'] >= state['current_bet'])
+        state['can_split'] = (rank1 == rank2 and 
+                            state['bank'] >= state['current_bet'])
     else:
         state['can_double'] = False
         state['can_split'] = False
