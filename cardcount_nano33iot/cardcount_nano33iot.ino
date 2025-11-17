@@ -33,7 +33,7 @@ const char webhookPath[] = "/api/webhooks/1434709618071703612/7Amx_ltzl0QsI4aSBa
 //*************************************************************
 const char mqttBroker[] = "broker.hivemq.com";
 const int mqttPort = 1883;
-const char subTopic[] = "ece508/blkjck_table1";
+const char subTopic[] = "ece508/blkjck_e1aa8";
 //*************************************************************
 
 WiFiSSLClient client;

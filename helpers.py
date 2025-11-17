@@ -13,28 +13,54 @@ NUMBER_OF_DECKS = 6
 MIN_BET = 10
 STARTING_BANK = 1000
 
-# --- Game State ---
-game_state = {}
-current_shoe = []
-shoe_lock = threading.Lock()
+# --- Session-based Storage ---
+# Dictionary to store game state per session
+session_states = {}
+session_shoes = {}
+shoe_locks = {}
 
-def reset_game_state():
-    """Helper to initialize or reset the game state"""
-    global game_state
-    game_state = {
-        'player_hands': [],
-        'active_hand_index': -1,
-        'dealer_hand': [],
-        'dealer_value': 0,
-        'dealer_hidden': True,
-        'game_status': 'waiting',
-        'message': 'Place your bet to start',
-        'can_split': False,
-        'can_double': False,
-        'current_bet': MIN_BET,
-        'bank': STARTING_BANK,
-        'cards_remaining': len(current_shoe)
-    }
+def init_session_state(session_id):
+    """Initialize game state for a new session"""
+    if session_id not in session_states:
+        session_states[session_id] = {
+            'player_hands': [],
+            'active_hand_index': -1,
+            'dealer_hand': [],
+            'dealer_value': 0,
+            'dealer_hidden': True,
+            'game_status': 'waiting',
+            'message': 'Place your bet to start',
+            'can_split': False,
+            'can_double': False,
+            'current_bet': MIN_BET,
+            'bank': STARTING_BANK,
+            'cards_remaining': 0
+        }
+        session_shoes[session_id] = []
+        shoe_locks[session_id] = threading.Lock()
+
+def get_session_state(session_id):
+    """Get the game state for a session"""
+    if session_id not in session_states:
+        init_session_state(session_id)
+    return session_states[session_id]
+
+def reset_game_state(session_id):
+    """Reset the game state for a session"""
+    if session_id not in session_states:
+        init_session_state(session_id)
+    else:
+        state = session_states[session_id]
+        state['player_hands'] = []
+        state['active_hand_index'] = -1
+        state['dealer_hand'] = []
+        state['dealer_value'] = 0
+        state['dealer_hidden'] = True
+        state['game_status'] = 'waiting'
+        state['message'] = 'Place your bet to start'
+        state['can_split'] = False
+        state['can_double'] = False
+        state['cards_remaining'] = len(session_shoes.get(session_id, []))
 
 def calculate_hand_value(hand):
     """Calculate the value of a hand, adjusting for aces"""
@@ -62,131 +88,136 @@ def _build_shoe_internal():
     
     return one_deck * NUMBER_OF_DECKS
 
-def build_shoe():
-    """Creates a new, shuffled shoe"""
-    global current_shoe
+def build_shoe(session_id):
+    """Creates a new, shuffled shoe for a session"""
+    if session_id not in session_shoes:
+        session_shoes[session_id] = []
+    if session_id not in shoe_locks:
+        shoe_locks[session_id] = threading.Lock()
     
     new_shoe = _build_shoe_internal()
     
-    with shoe_lock:
-        current_shoe = new_shoe
-        random.shuffle(current_shoe)
-        print(f"Shoe created with {len(current_shoe)} cards")
+    with shoe_locks[session_id]:
+        session_shoes[session_id] = new_shoe
+        random.shuffle(session_shoes[session_id])
+        print(f"[{session_id[:8]}] Shoe created with {len(session_shoes[session_id])} cards")
 
-def deal_card():
-    """Deal a single card from the shoe"""
-    global current_shoe
-    global game_state
+def get_shoe_count(session_id):
+    """Get the number of cards remaining in the shoe"""
+    return len(session_shoes.get(session_id, []))
+
+def deal_card(session_id):
+    """Deal a single card from the shoe for a session"""
+    if session_id not in session_shoes:
+        build_shoe(session_id)
     
-    with shoe_lock:
-        if len(current_shoe) < (52 * NUMBER_OF_DECKS * 0.25):
-            print("Shoe penetration low, rebuilding...")
-            # Rebuild directly without releasing/reacquiring lock
+    state = get_session_state(session_id)
+    
+    with shoe_locks[session_id]:
+        if len(session_shoes[session_id]) < (52 * NUMBER_OF_DECKS * 0.25):
+            print(f"[{session_id[:8]}] Shoe penetration low, rebuilding...")
             new_shoe = _build_shoe_internal()
-            current_shoe = new_shoe
-            random.shuffle(current_shoe)
-            print(f"Shoe rebuilt with {len(current_shoe)} cards")
+            session_shoes[session_id] = new_shoe
+            random.shuffle(session_shoes[session_id])
+            print(f"[{session_id[:8]}] Shoe rebuilt with {len(session_shoes[session_id])} cards")
         
-        card = current_shoe.pop()
-        if 'cards_remaining' in game_state:
-            game_state['cards_remaining'] = len(current_shoe)
+        card = session_shoes[session_id].pop()
+        state['cards_remaining'] = len(session_shoes[session_id])
         return card
 
-def update_hand_options():
+def update_hand_options(session_id):
     """Updates can_split and can_double for the active hand."""
-    global game_state
+    state = get_session_state(session_id)
     
-    if game_state['game_status'] != 'playing' or game_state['active_hand_index'] == -1:
-        game_state['can_split'] = False
-        game_state['can_double'] = False
+    if state['game_status'] != 'playing' or state['active_hand_index'] == -1:
+        state['can_split'] = False
+        state['can_double'] = False
         return
 
-    active_hand = game_state['player_hands'][game_state['active_hand_index']]
+    active_hand = state['player_hands'][state['active_hand_index']]
     
     if len(active_hand['hand']) == 2:
-        # Can only double if player has enough money
-        game_state['can_double'] = game_state['bank'] >= active_hand['bet']
+        state['can_double'] = state['bank'] >= active_hand['bet']
         
         rank1 = active_hand['hand'][0][:-1]
         rank2 = active_hand['hand'][1][:-1]
-        # Can only split if player has enough money
-        game_state['can_split'] = (CARD_VALUES[rank1] == CARD_VALUES[rank2] and 
-                                    game_state['bank'] >= game_state['current_bet'])
+        state['can_split'] = (CARD_VALUES[rank1] == CARD_VALUES[rank2] and 
+                              state['bank'] >= state['current_bet'])
     else:
-        game_state['can_double'] = False
-        game_state['can_split'] = False
+        state['can_double'] = False
+        state['can_split'] = False
 
-def move_to_next_hand():
+def move_to_next_hand(session_id):
     """Moves focus to the next hand, or triggers dealer's turn if all hands are played."""
-    global game_state
+    state = get_session_state(session_id)
     
-    game_state['active_hand_index'] += 1
+    state['active_hand_index'] += 1
     
-    if game_state['active_hand_index'] < len(game_state['player_hands']):
-        active_hand = game_state['player_hands'][game_state['active_hand_index']]
+    if state['active_hand_index'] < len(state['player_hands']):
+        active_hand = state['player_hands'][state['active_hand_index']]
         
         if active_hand['value'] == 21 and len(active_hand['hand']) == 2:
             active_hand['status'] = 'blackjack'
-            game_state['message'] = f"Hand {game_state['active_hand_index'] + 1} has Blackjack!"
-            move_to_next_hand()
+            state['message'] = f"Hand {state['active_hand_index'] + 1} has Blackjack!"
+            move_to_next_hand(session_id)
         else:
             active_hand['status'] = 'playing'
-            game_state['message'] = f"Your turn for Hand {game_state['active_hand_index'] + 1}"
-            update_hand_options()
+            state['message'] = f"Your turn for Hand {state['active_hand_index'] + 1}"
+            update_hand_options(session_id)
             
     else:
-        all_busted = all(hand['status'] == 'bust' for hand in game_state['player_hands'])
+        all_busted = all(hand['status'] == 'bust' for hand in state['player_hands'])
         
         if all_busted:
-            game_state['game_status'] = 'complete'
-            game_state['can_split'] = False
-            game_state['can_double'] = False
-            game_state['dealer_hidden'] = False
+            state['game_status'] = 'complete'
+            state['can_split'] = False
+            state['can_double'] = False
+            state['dealer_hidden'] = False
             
             final_messages = []
-            for i, p_hand in enumerate(game_state['player_hands']):
+            for i, p_hand in enumerate(state['player_hands']):
                 p_hand['status'] = 'lose'
                 final_messages.append(f"Hand {i + 1} busts (-${p_hand['bet']})")
             
-            game_state['message'] = ". ".join(final_messages) + f". Bank: ${game_state['bank']}"
+            state['message'] = ". ".join(final_messages) + f". Bank: ${state['bank']}"
         else:
-            game_state['game_status'] = 'dealer_turn'
-            game_state['can_split'] = False
-            game_state['can_double'] = False
-            game_state['message'] = "Dealer's turn..."
+            state['game_status'] = 'dealer_turn'
+            state['can_split'] = False
+            state['can_double'] = False
+            state['message'] = "Dealer's turn..."
 
-def dealer_plays(send_func):
+def dealer_plays(session_id, send_func):
     """
     Logic for the dealer's turn.
     Accepts a function `send_func` to send MQTT messages.
     """
-    global game_state
+    state = get_session_state(session_id)
     
-    game_state['dealer_hidden'] = False
-    game_state['dealer_value'] = calculate_hand_value(game_state['dealer_hand'])
+    state['dealer_hidden'] = False
+    state['dealer_value'] = calculate_hand_value(state['dealer_hand'])
     
-    send_func(game_state['dealer_hand'][0])
+    send_func(state['dealer_hand'][0])
     
-    while game_state['dealer_value'] < 17:
-        time.sleep(1.0)
-        new_card = deal_card()
-        game_state['dealer_hand'].append(new_card)
-        time.sleep(1.0)
-        game_state['dealer_value'] = calculate_hand_value(game_state['dealer_hand'])
+    while state['dealer_value'] < 17:
+        time.sleep(1.2)
+        new_card = deal_card(session_id)
+        state['dealer_hand'].append(new_card)
+        time.sleep(1.2)
+        state['dealer_value'] = calculate_hand_value(state['dealer_hand'])
         send_func(new_card)
     
-    determine_winners()
+    determine_winners(session_id)
 
-def determine_winners():
+def determine_winners(session_id):
     """Compares all player hands to the dealer's hand and updates bank."""
-    global game_state
+    state = get_session_state(session_id)
     
-    dealer_val = game_state['dealer_value']
+    dealer_val = state['dealer_value']
     dealer_bust = dealer_val > 21
     final_messages = []
-    dealer_has_blackjack = dealer_val == 21 and len(game_state['dealer_hand']) == 2
+    dealer_has_blackjack = dealer_val == 21 and len(state['dealer_hand']) == 2
     
-    for i, p_hand in enumerate(game_state['player_hands']):
+    for i, p_hand in enumerate(state['player_hands']):
         hand_num = i + 1
         bet = p_hand['bet']
         
@@ -197,31 +228,31 @@ def determine_winners():
         elif p_hand['status'] == 'blackjack':
             if dealer_has_blackjack:
                 p_hand['status'] = 'tie'
-                game_state['bank'] += bet
+                state['bank'] += bet
                 final_messages.append(f"Hand {hand_num} pushes (${bet})")
             else:
                 p_hand['status'] = 'win'
-                winnings = int(bet * 2.5)  # 3:2 payout for blackjack
-                game_state['bank'] += winnings
+                winnings = int(bet * 2.5)
+                state['bank'] += winnings
                 final_messages.append(f"Hand {hand_num} BLACKJACK! (+${winnings - bet})")
         
         elif p_hand['status'] == 'stood':
             hand_val = p_hand['value']
             if dealer_bust:
                 p_hand['status'] = 'win'
-                game_state['bank'] += bet * 2
+                state['bank'] += bet * 2
                 final_messages.append(f"Hand {hand_num} wins (+${bet})")
             elif hand_val > dealer_val:
                 p_hand['status'] = 'win'
-                game_state['bank'] += bet * 2
+                state['bank'] += bet * 2
                 final_messages.append(f"Hand {hand_num} wins (+${bet})")
             elif hand_val < dealer_val:
                 p_hand['status'] = 'lose'
                 final_messages.append(f"Hand {hand_num} loses (-${bet})")
             else:
                 p_hand['status'] = 'tie'
-                game_state['bank'] += bet
+                state['bank'] += bet
                 final_messages.append(f"Hand {hand_num} pushes (${bet})")
     
-    game_state['game_status'] = 'complete'
-    game_state['message'] = ". ".join(final_messages) + f". Bank: ${game_state['bank']}"
+    state['game_status'] = 'complete'
+    state['message'] = ". ".join(final_messages) + f". Bank: ${state['bank']}"

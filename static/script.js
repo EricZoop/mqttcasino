@@ -1,5 +1,45 @@
 let gameState = null;
 let previousState = null;
+let sessionId = null;
+
+// Generate a unique session ID for this tab (doesn't persist)
+function getSessionId() {
+    if (!sessionId) {
+        // Generate a new unique session ID for this tab
+        sessionId = generateSessionId();
+    }
+    return sessionId;
+}
+
+function generateSessionId() {
+    // Generate a random hex string (similar to what the server does)
+    const array = new Uint8Array(16);
+    crypto.getRandomValues(array);
+    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function setSessionId(newSessionId) {
+    sessionId = newSessionId;
+}
+
+async function initSession() {
+    try {
+        const response = await fetch('/init_session', { method: 'POST' });
+        const result = await response.json();
+        
+        setSessionId(result.session_id);
+        
+        // Update MQTT config fields
+        document.getElementById('mqtt-broker').value = result.broker;
+        document.getElementById('mqtt-port').value = result.port;
+        document.getElementById('mqtt-topic').value = result.topic;
+        
+        return result.session_id;
+    } catch (error) {
+        console.error('Error initializing session:', error);
+        return null;
+    }
+}
 
 function createCard(rank, hidden = false, shouldAnimate = true) {
     const card = document.createElement('div');
@@ -58,17 +98,14 @@ function createPlayerHand(handData, index, isActive, previousHand = null) {
 
     const status = handData.status.charAt(0).toUpperCase() + handData.status.slice(1);
     
-    // Determine bet color class based on hand status
     let betColorClass = '';
-    let betPrefix = ''; // <-- NEW: Initialize prefix
+    let betPrefix = '';
     if (handData.status === 'lose' || handData.status === 'bust') {
         betColorClass = 'bet-loss';
-        betPrefix = '-'; // <-- NEW: Set prefix for loss
+        betPrefix = '-';
     } else if (handData.status === 'win' || handData.status === 'blackjack') {
         betColorClass = 'bet-win';
     }
-    // 'tie' or 'push' status will have no class (stays white)
-    // 'playing', 'stood', 'pending' will also stay white
     
     handContainer.innerHTML = `
     <span class="hand-value">${handData.value}</span>
@@ -92,15 +129,7 @@ function createPlayerHand(handData, index, isActive, previousHand = null) {
     return handContainer;
 }
 
-/**
- * Animates the text content of an element from a start value to an end value.
- * @param {HTMLElement} element - The DOM element to update.
- * @param {number} start - The starting number.
- * @param {number} end - The ending number.
- * @param {number} duration - The animation duration in milliseconds.
- */
 function animateValue(element, start, end, duration) {
-    // If the value hasn't changed, just set the text and return
     if (start === end) {
         element.textContent = `$${end}`;
         return;
@@ -112,16 +141,13 @@ function animateValue(element, start, end, duration) {
         if (!startTime) startTime = timestamp;
         const progress = Math.min((timestamp - startTime) / duration, 1);
         
-        // Calculate the current value based on progress
         const currentValue = Math.floor(progress * (end - start) + start);
 
         element.textContent = `$${currentValue}`;
 
-        // Continue animation until progress is 1 (100%)
         if (progress < 1) {
             window.requestAnimationFrame(step);
         } else {
-            // Ensure it ends on the exact final value
             element.textContent = `$${end}`; 
         }
     };
@@ -140,22 +166,16 @@ function updateDisplay(state) {
     
     gameState = state;
     
-    // Update bank display
     const bankElement = document.getElementById('bank-amount');
     const newBankValue = state.bank;
     
-    // Get the current value from the DOM to animate from
     const currentText = bankElement.textContent.replace('$', '');
-    // Use newBankValue as fallback if parsing fails (e.g., on first load)
     const startBankValue = parseInt(currentText) || newBankValue; 
     
-    // Animate the value over 300 milliseconds
     animateValue(bankElement, startBankValue, newBankValue, 350);
     
-    // Update cards remaining
     document.getElementById('cards-remaining').textContent = state.cards_remaining;
     
-    // Update dealer's cards
     const dealerCards = document.getElementById('dealer-cards');
     dealerCards.innerHTML = '';
     
@@ -178,13 +198,12 @@ function updateDisplay(state) {
         
         dealerValueElement.textContent = 
             state.dealer_hidden ? CARD_VALUES[state.dealer_hand[1].slice(0, -1)] : state.dealer_value;
-        dealerValueElement.style.display = '';  // <-- ADDED: Show the value when cards exist
+        dealerValueElement.style.display = '';
     } else {
         dealerValueElement.textContent = '0';
-        dealerValueElement.style.display = 'none';  // <-- ADDED: Hide the value when no cards
+        dealerValueElement.style.display = 'none';
     }
     
-    // Update player's cards
     const playerHands = document.getElementById('player-hands-display');
     playerHands.innerHTML = '';
     if (state.player_hands && state.player_hands.length > 0) {
@@ -196,10 +215,8 @@ function updateDisplay(state) {
         });
     }
     
-    // Update status message
     document.getElementById('status-message').textContent = state.message;
     
-    // Update button states
     const playing = state.game_status === 'playing';
     document.getElementById('hit-btn').disabled = !playing;
     document.getElementById('stand-btn').disabled = !playing;
@@ -207,23 +224,20 @@ function updateDisplay(state) {
     document.getElementById('bet-input').disabled = playing;
     document.querySelectorAll('.bet-quick').forEach(btn => btn.disabled = playing);
     document.getElementById('reset-bank-btn').disabled = playing;
+    //document.getElementById('host-table-btn').disabled = playing;
     document.querySelector('.bet-control').classList.toggle('disabled', playing);
     
-    // Enable/disable split and double
     document.getElementById('double-btn').disabled = !state.can_double;
     document.getElementById('split-btn').disabled = !state.can_split;
     
-    // Store current state for next comparison
     previousState = JSON.parse(JSON.stringify(state));
 
     if (state.game_status === 'dealer_turn') {
-        // Disable all buttons while dealer is playing
         document.getElementById('hit-btn').disabled = true;
         document.getElementById('stand-btn').disabled = true;
         document.getElementById('double-btn').disabled = true;
         document.getElementById('split-btn').disabled = true;
 
-        // Call the next dealer step after 1 second
         setTimeout(dealerStep, 300); 
     }
 }
@@ -231,30 +245,35 @@ function updateDisplay(state) {
 function setBet(amount) {
     const betInput = document.getElementById('bet-input');
     
-    // Get the current value from the input, default to 0 if it's empty
     let currentBet = parseInt(betInput.value) || 0;
     
-    // Add the new amount
     let newBet = currentBet + amount;
     
-    // Ensure the new bet doesn't exceed the player's bank
     betInput.value = Math.min(newBet, gameState.bank);
 }
 
 async function deal() {
     try {
+        const sid = getSessionId();
+        if (!sid) {
+            console.error('No session ID');
+            return;
+        }
+        
         previousState = null;
         
-        // Set the bet first
         const betAmount = parseInt(document.getElementById('bet-input').value);
         await fetch('/set_bet', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: betAmount })
+            body: JSON.stringify({ session_id: sid, amount: betAmount })
         });
         
-        // Then deal
-        const response = await fetch('/deal', { method: 'POST' });
+        const response = await fetch('/deal', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sid })
+        });
         const state = await response.json();
         updateDisplay(state);
     } catch (error) {
@@ -265,7 +284,14 @@ async function deal() {
 
 async function hit() {
     try {
-        const response = await fetch('/hit', { method: 'POST' });
+        const sid = getSessionId();
+        if (!sid) return;
+        
+        const response = await fetch('/hit', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sid })
+        });
         const state = await response.json();
         updateDisplay(state);
     } catch (error) {
@@ -275,7 +301,14 @@ async function hit() {
 
 async function stand() {
     try {
-        const response = await fetch('/stand', { method: 'POST' });
+        const sid = getSessionId();
+        if (!sid) return;
+        
+        const response = await fetch('/stand', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sid })
+        });
         const state = await response.json();
         updateDisplay(state);
     } catch (error) {
@@ -285,7 +318,14 @@ async function stand() {
 
 async function doubleDown() {
     try {
-        const response = await fetch('/double', { method: 'POST' });
+        const sid = getSessionId();
+        if (!sid) return;
+        
+        const response = await fetch('/double', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sid })
+        });
         const state = await response.json();
         updateDisplay(state);
     } catch (error) {
@@ -295,7 +335,14 @@ async function doubleDown() {
 
 async function split() {
     try {
-        const response = await fetch('/split', { method: 'POST' });
+        const sid = getSessionId();
+        if (!sid) return;
+        
+        const response = await fetch('/split', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sid })
+        });
         const state = await response.json();
         updateDisplay(state);
     } catch (error) {
@@ -305,12 +352,19 @@ async function split() {
 
 async function dealerStep() {
     try {
-        const response = await fetch('/dealer_step', { method: 'POST' });
+        const sid = getSessionId();
+        if (!sid) return;
+        
+        const response = await fetch('/dealer_step', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sid })
+        });
         if (!response.ok) {
             throw new Error(`Server error: ${response.status}`);
         }
         const state = await response.json();
-        updateDisplay(state); // This will re-trigger the loop if status is still 'dealer_turn'
+        updateDisplay(state);
     } catch (error) {
         console.error('Error during dealer step:', error);
         document.getElementById('status-message').textContent = 'Error during dealer turn.';
@@ -319,10 +373,19 @@ async function dealerStep() {
 
 async function resetBankAndShuffle() {
     try {
-        // Reset bank
-        await fetch('/reset_bank', { method: 'POST' });
-        // Shuffle deck
-        const response = await fetch('/shuffle', { method: 'POST' });
+        const sid = getSessionId();
+        if (!sid) return;
+        
+        await fetch('/reset_bank', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sid })
+        });
+        const response = await fetch('/shuffle', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sid })
+        });
         const state = await response.json();
         updateDisplay(state);
     } catch (error) {
@@ -330,44 +393,72 @@ async function resetBankAndShuffle() {
     }
 }
 
-// Card values for display
+async function hostTable() {
+    try {
+        const response = await fetch('/host_table', { method: 'POST' });
+        const result = await response.json();
+        
+        if (result.error) {
+            document.getElementById('status-message').textContent = `Error: ${result.error}`;
+            return;
+        }
+        
+        // Set the new session ID for THIS tab
+        setSessionId(result.session_id);
+        
+        // Update MQTT config fields with new table info
+        document.getElementById('mqtt-broker').value = result.broker;
+        document.getElementById('mqtt-port').value = result.port;
+        document.getElementById('mqtt-topic').value = result.topic;
+        
+        // Reload the game state for this new session
+        const stateResponse = await fetch(`/state?session_id=${result.session_id}`);
+        const state = await stateResponse.json();
+        
+        previousState = null;
+        updateDisplay(state);
+        
+        document.getElementById('status-message').textContent = 
+            `New table hosted! Session: ${result.session_id.substring(0, 8)} | Topic: ${result.topic}`;
+    } catch (error) {
+        console.error('Error hosting table:', error);
+        document.getElementById('status-message').textContent = 'Error creating new table';
+    }
+}
+
 const CARD_VALUES = {
     'A': 11, 'K': 10, 'Q': 10, 'J': 10, 'T': 10,
     '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2
 };
 
-// Load initial state on page load
 window.onload = async function() {
     try {
-        const response = await fetch('/state');
+        // Always create a new session for this tab
+        const sid = await initSession();
+        
+        const response = await fetch(`/state?session_id=${sid}`);
         const state = await response.json();
+        
+        // Update MQTT config fields if provided
+        if (state.mqtt_config) {
+            document.getElementById('mqtt-broker').value = state.mqtt_config.broker;
+            document.getElementById('mqtt-port').value = state.mqtt_config.port;
+            document.getElementById('mqtt-topic').value = state.mqtt_config.topic;
+        }
+        
         updateDisplay(state);
     } catch (error) {
         console.error('Error loading state:', error);
     }
-
 };
 
-async function resetBankAndShuffle() {
-    try {
-        // Reset bank
-        await fetch('/reset_bank', { method: 'POST' });
-        // Shuffle deck
-        const response = await fetch('/shuffle', { method: 'POST' });
-        const state = await response.json();
-        updateDisplay(state);
-    } catch (error) {
-        console.error('Error resetting bank and shuffling:', error);
-    }
-}
-
-
 async function updateMqttConfig() {
-
-    
     const statusEl = document.getElementById('status-message');
 
     try {
+        const sid = getSessionId();
+        if (!sid) return;
+        
         const broker = document.getElementById('mqtt-broker').value;
         const port = parseInt(document.getElementById('mqtt-port').value);
         const topic = document.getElementById('mqtt-topic').value;
@@ -375,20 +466,17 @@ async function updateMqttConfig() {
         const response = await fetch('/update_mqtt', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ broker, port, topic })
+            body: JSON.stringify({ session_id: sid, broker, port, topic })
         });
         
         const result = await response.json();
         if (result.error) {
-            // Use status message instead of alert
             statusEl.textContent = `MQTT Error: ${result.error}`;
         } else {
-            // Use status message instead of alert
             statusEl.textContent = 'MQTT configuration updated successfully!';
         }
     } catch (error) {
         console.error('Error updating MQTT config:', error);
-        // Use status message instead of alert
         statusEl.textContent = 'Error updating MQTT configuration';
     }
 }
