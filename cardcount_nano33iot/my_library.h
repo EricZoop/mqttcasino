@@ -2,8 +2,17 @@
 #define MY_LIBRARY_H
 
 #include <Arduino.h>
+#include <Adafruit_SSD1306.h>
+#include <WiFiSSLClient.h> // Required for WiFiSSLClient
+#include <WiFiNINA.h> // Required for WiFiClient
 
-
+// EXTERNAL GLOBAL VARIABLES (Declared in main .ino file)
+extern Adafruit_SSD1306 myOled;
+extern WiFiSSLClient client;
+extern const char webhookHost[];
+extern const char webhookPath[];
+extern const int webhookPort;
+extern char tmpBuffer[64]; // Used in buildJsonPayload
 
 // BITMAPS
 const unsigned char spade_bitmap[] PROGMEM   = // Hex // Binary
@@ -24,6 +33,11 @@ const unsigned char diamond_bitmap[] PROGMEM = {0x10,0x38,0x7C,0xFE,0x7C,0x38,0x
 void convHHMMSS(unsigned long currSeconds, char *uptimeDDHHMMSS);
 void convCurrentTime(unsigned long currSeconds, char *timeStr);
 void getWiFiRSSI(char *wifiRSSI);
+
+// NEW FUNCTION PROTOTYPES
+String buildJsonPayload(const String& message, long color, const String& content);
+void sendDiscordNotification(String jsonPayload);
+void displayTextOLED(String oledline[]);
 
 
 #endif // MY_LIBRARY_H
