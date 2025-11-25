@@ -1,12 +1,10 @@
-
-
 /**************************************************************************
  Class: ECE508 Fall 2025
  Team 8
  Date: 12/15/2025
 
  Final Project
- Description:
+ Description: Card counting system with multiple strategies
  Issues: No issues
  **************************************************************************/
 
@@ -19,30 +17,32 @@
 #include <ArduinoMqttClient.h>
 
 #include "my_library.h"
+#include "counting_strategies.h"
 
 // Internet Configuration
-//*************************************************************
-const char teamNumber[11] = "Team8";
 const char* wifi_ssid = "GuestZ";               // REPLACE
 const char* wifi_pass = "rooster65";            // REPLACE
+//*************************************************************
 
+// Discord Configuration
 const char webhookHost[] = "discord.com";
 const int webhookPort = 443;
-const char webhookPath[] = "/api/webhooks/1434709618071703612/7Amx_ltzl0QsI4aSBa1_XJqNyuelmp4YTuAcucVVK9jL5yPut61slkljkB7F3-Aqn9An";
+const char webhookPath[] = "/api/webhooks/1442641244252803223/lTG5afLzq5f_i0Qw6wy_1lhYNjQlci6zncikj7vuZF80o0du6d35ITz5qeOckVECoLb5";
 //*************************************************************
 
 // MQTT Configuration
-//*************************************************************
 const char mqttBroker[] = "broker.hivemq.com";
 const int mqttPort = 1883;
-const char subTopic[] = "ece508/blkjck_table1";
+const char subTopic[] = "gmu/ece508/team08/blkjck_table1";
+
+// const char subTopicHeartbeat[] = " gmu/ece508/team08/player1";
 //*************************************************************
+
 
 WiFiSSLClient client;
 
-
-#define vibOutPin 5 // Vibration motor
-
+#define vibOutPin 5 // Vibrator actuator
+#define SW1_PIN 10 // Switch
 
 int statusWiFi = WL_IDLE_STATUS;
 #define I2C_ADDRESS 0x3C
@@ -54,6 +54,11 @@ int statusWiFi = WL_IDLE_STATUS;
 Adafruit_SSD1306 myOled(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 WiFiClient wifiClient;
 MqttClient mqttClient(wifiClient); // Instantiate the client
+
+int scrollPosition = 0;
+unsigned long lastScrollTime = 0;
+const int scrollDelay = 250; // ms between scroll steps
+const int maxDisplayChars = 21; // Max characters that fit on one line (128px / 6px per char)
 
 long currMillis, prevMillis;
 char tmpBuffer[64];
@@ -67,17 +72,19 @@ double trueCount = 0.0;
 const int totalDecks = 6;
 const int totalCards = totalDecks * 52; // 312
 
-
 int cardsDealt = 0;
 
 // Flags to ensure one-time alerts
 bool hotAlertSent = false;
 bool coldAlertSent = true; // START "cold" alert as already sent (disarmed)
 
+// Card counting strategy
+CountingStrategy currentStrategy = HILO; // Default to Hi-Lo
+bool lastSwitchState = HIGH;
 
 void vibrate(int duration) {
 
-  oledline[8] = "     VIBRATING!    "; 
+  oledline[7] = "       VIBRATING!"; 
   displayTextOLED(oledline);
 
   digitalWrite(vibOutPin, HIGH);
@@ -85,43 +92,80 @@ void vibrate(int duration) {
   digitalWrite(vibOutPin, LOW);
   
 
-  oledline[8] = ""; 
+  oledline[7] = ""; 
   displayTextOLED(oledline); 
 }
 
-// VIBRATE
+// VIBRATION CONFIG
 
-// Vibrate three short blips for a "hot" count
+// Count is Hot!
 void vibrateHot() {
-  vibrate(100); // Short pulse
-  delay(100);
-  vibrate(100); // Short pulse
-  delay(100);
-  vibrate(100); // Short pulse
+  vibrate(300);
+  delay(150);
+  vibrate(300);
+  delay(150);
+  vibrate(300);
 }
 
-// Vibrate and hold for 3 seconds for a "reset"
+// Count is Reset
 void vibrateReset() {
   vibrate(3000); // Long 3-second hold
 }
 
-// Vibrate one very short blip for "back to 0"
+// Count cooled down
 void vibrateCold() {
-  vibrate(50); // Very short blip
+  vibrate(500); // Very short blip
 }
 
-// --- END VIBRATION HELPER FUNCTIONS ---
-
+void checkStrategySwitch() {
+  bool currentSwitchState = digitalRead(SW1_PIN);
+  
+  // Detect button press (assuming pull-up, so LOW = pressed)
+  if (currentSwitchState == LOW && lastSwitchState == HIGH) {
+    delay(50); // Debounce
+    
+    // Toggle strategy
+    if (currentStrategy == HILO) {
+      currentStrategy = OMEGA_II;
+    } else {
+      currentStrategy = HILO;
+    }
+    
+    // Reset counts when changing strategy
+    runningCount = 0;
+    trueCount = 0.0;
+    cardsDealt = 0;
+    hotAlertSent = false;
+    coldAlertSent = true;
+    
+    // Update all relevant OLED lines
+    oledline[3] = "Strategy: " + getStrategyName(currentStrategy);
+    oledline[4] = "Last Card: AKQJT98765";
+    oledline[5] = "Run Count: 0";
+    oledline[6] = "True Count: 0.00";
+    
+    displayTextOLED(oledline);
+    
+    // Haptic feedback
+    vibrate(125);
+    
+    oledline[7] = "";
+    displayTextOLED(oledline);
+    
+    Serial.println("Strategy: " + getStrategyName(currentStrategy));
+  }
+  
+  lastSwitchState = currentSwitchState;
+}
 
 void setup() {
   //Initialize serial:
   Serial.begin(9600);
   pinMode(LED_BUILTIN, OUTPUT);
-  // NEW: Initialize the vibration motor pin
   pinMode(vibOutPin, OUTPUT); 
+  pinMode(SW1_PIN, INPUT_PULLUP); // Configure switch with internal pull-up
 
   Wire.begin();
-  // NEW: Initialize the Adafruit OLED
   if (!myOled.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS)) {
     Serial.println(F("SSD1306 allocation failed"));
     for (;;);
@@ -135,15 +179,17 @@ void setup() {
 
   myOled.setTextSize(1);
   myOled.setTextColor(SSD1306_WHITE);
-  myOled.setFont(); // Use default Adafruit font
+  myOled.setFont();
 
   // Row 1
-  oledline[1] = String(teamNumber) + " ECE508";
+  oledline[1] = "MQTT Casino";
+
   // Initialize all lines
   int jj; for (jj = 2; jj <= 8; jj++) {
     oledline[jj] = "";
   }
 
+  oledline[3] = "Strategy: " + getStrategyName(currentStrategy);
   oledline[4] = "Last Card: AKQJT9876";
   oledline[5] = "Run Count: 0";
   oledline[6] = "True Count: 0.00";
@@ -163,18 +209,16 @@ void setup() {
   }
   Serial.println("Connected to WiFi");
 
-  // --- MQTT Setup (NEW) ---
   Serial.println("Setting up MQTT...");
-  // Set the message callback function
   mqttClient.onMessage(onMqttMessage);
   
   // Connect to the MQTT broker
   Serial.println("Connecting to MQTT broker...");
   while (!mqttClient.connect(mqttBroker, mqttPort)) {
     Serial.println(mqttClient.connectError());
-
   }
   Serial.println("Connected to MQTT broker!");
+
 
   Serial.print("Subscribing to topic: ");
   Serial.println(subTopic);
@@ -184,14 +228,13 @@ void setup() {
      Serial.println("Subscribed!");
   }
 
+
   // Send Discord connection notification
   long color;
   String content;
   String message;
 
-
-  color = 2483968;
-  // Green
+  color = 2483968; // Green
   content = ""; // Ping Users or Roles
   message = String("Connected to Discord Server\\n\\n MQTT Configuration: \\n") +
           "`" + String(mqttBroker) + "` \\n `" + String(mqttPort) + "` \\n `" + String(subTopic) + "`";
@@ -209,6 +252,8 @@ void onMqttMessage(int messageSize) {
 
   Serial.println(msgString);
   
+  // CARD COUNTING ALGORITHM
+
   msgString.trim();
   if (msgString.length() > 0) {
     char card = msgString.charAt(0);
@@ -227,34 +272,21 @@ void onMqttMessage(int messageSize) {
         hotAlertSent = false;
         coldAlertSent = true; // Set to true to prevent "back to 0" alert
 
-        // Trigger VIBRATION for RESET (Hold for 3 seconds)
+        
         vibrateReset(); 
         
         // Send Shuffle Notification
-        color = 0;
-        // Black
+        color = 0; // Black
         content = "";
-        message = "Dealer shuffeled cards! Table's count is reset.";
+        message = "Dealer shuffled cards! Table's count is reset.";
         sendDiscordNotification(buildJsonPayload(message, color, content));
+
         break;
-      case 'A':
-      case 'K':
-      case 'Q':
-      case 'J':
-      case 'T':
-        runningCount--;
-        break;
-        
-      case '6':
-      case '5':
-      case '4':
-      case '3':
-      case '2':
-        runningCount++;
-        break;
-        
+
       default:
-        // Do nothing for neutral cards (9, 8, 7)
+        // Use the strategy system to get card value
+        int cardValue = getCardValue(card, currentStrategy);
+        runningCount += cardValue;
         break;
     }
 
@@ -266,7 +298,7 @@ void onMqttMessage(int messageSize) {
     // True count calculation
     double decksRemaining = (double)(totalCards - cardsDealt) / 52.0;
     
-    // Protect against division by zero if all cards are dealt
+    // Protect against division by zero
     if (decksRemaining > 0) {
       trueCount = (double)runningCount / decksRemaining;
     } else {
@@ -279,15 +311,13 @@ void onMqttMessage(int messageSize) {
     oledline[4] = "Last Card: " + msgString;
     oledline[5] = "Run Count: " + String(runningCount);
     oledline[6] = "True Count: " + String(trueCount, 2);
-    // Show 2 decimal places
-  
 
-    // Hot alert
+
+    // Hot alert (threshold may need adjustment for Omega II)
     if (runningCount > 4 && !hotAlertSent) {
       hotAlertSent = true;
       coldAlertSent = false;
 
-      // Trigger VIBRATION for HOT (3 short pulses)
       vibrateHot(); 
 
       color = 16732672; // Red Orange
@@ -301,7 +331,6 @@ void onMqttMessage(int messageSize) {
       coldAlertSent = true;
       hotAlertSent = false;
 
-      // Trigger VIBRATION for COLD (1 very short blip)
       vibrateCold(); 
 
       color = 3325951; // Blue
@@ -317,23 +346,23 @@ void onMqttMessage(int messageSize) {
 
 void loop() {
 
+  // Check for strategy switch
+  checkStrategySwitch();
+  
   // MQTT polling
   mqttClient.poll();
   currMillis = millis();
+
   if (currMillis - prevMillis > 1000) {
     prevMillis = currMillis;
     digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    
     // Row 2: WiFi RSSI and IP address
     getWiFiRSSI(tmpBuffer);
     oledline[2] = String(tmpBuffer);
-    // Row 3: SSID
-    //oledline[3] = "SSID: " + String(WiFi.SSID());
-    // Subrcribed
-    oledline[7] = subTopic;
-
-    // Row 8: Uptime hh:mm:ss
-    //convHHMMSS(millis() / 1000, tmpBuffer); // The convHHMMSS is now in my_library.cpp
-    //oledline[8] = "Uptime: " + String(tmpBuffer);
+    
+    // Row 8: Show subscription
+    oledline[8] = subTopic;
 
     displayTextOLED(oledline);
   }

@@ -34,7 +34,6 @@ void convHHMMSS(unsigned long currSeconds, char *uptimeDDHHMMSS);
 void convCurrentTime(unsigned long currSeconds, char *timeStr);
 void getWiFiRSSI(char *wifiRSSI);
 
-// NEW FUNCTION PROTOTYPES
 String buildJsonPayload(const String& message, long color, const String& content);
 void sendDiscordNotification(String jsonPayload);
 void displayTextOLED(String oledline[]);

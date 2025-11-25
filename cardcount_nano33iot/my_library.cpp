@@ -60,7 +60,7 @@ String buildJsonPayload(const String& message, long color, const String& content
          "}"
     
          "}],"
-         "\"username\":\"Le Chiffre\","
+         "\"username\":\"James Bond\","
          "\"allowed_mentions\":{\"parse\":[\"roles\"]},"
          "\"attachments\":[]"
          "}";

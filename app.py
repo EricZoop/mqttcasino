@@ -72,7 +72,7 @@ def get_mqtt_client(session_id):
             'client': client,
             'broker': "broker.hivemq.com",
             'port': 1883,
-            'topic': f"ece508/blkjck_{session_id[:5]}",
+            'topic': f"gmu/ece508/team08/blkjck_{session_id[:5]}",
             'connected': False
         }
     return mqtt_clients[session_id]
