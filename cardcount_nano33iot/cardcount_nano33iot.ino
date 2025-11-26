@@ -43,7 +43,6 @@ const char pubTopicHeartbeat[] = "gmu/ece508/team08/player1";
 TinyGPSPlus gps; 
 WiFiSSLClient client;
 
-// Hardware Configuration (Changed from #define to const int for extern compatibility)
 const int vibOutPin = 5; // Vibrator actuator
 #define SW1_PIN 10  // Switch
 
@@ -71,7 +70,7 @@ String oledline[9];
 
 // Heartbeat timers and data (Defined here, externed in heartbeat.h)
 unsigned long lastHeartbeatTime = 0;
-const unsigned long heartbeatInterval = 3000; // 3 seconds
+const unsigned long heartbeatInterval = 20000; // 3 seconds
 String lastCard = "None"; // Tracks the last card read
 //*************************************************************
 
