@@ -5,12 +5,11 @@ import helpers
 import secrets
 import threading
 
-# --- App Configuration ---
 app = Flask(__name__)
 
-# Session timeout configuration
+# Session timeout
 SESSION_TIMEOUT_SECONDS = 10 * 60  # 10 minutes
-SESSION_CLEANUP_INTERVAL_SECONDS = 60  # Check every minute
+SESSION_CLEANUP_INTERVAL_SECONDS = 60  
 
 # Store MQTT clients per session
 mqtt_clients = {}
@@ -18,10 +17,8 @@ mqtt_clients = {}
 # Track last activity time for each session
 session_last_activity = {}
 
-# --- Session Management ---
 
 def update_session_activity(session_id):
-    """Update the last activity timestamp for a session"""
     session_last_activity[session_id] = time.time()
 
 def cleanup_inactive_sessions():
@@ -62,10 +59,7 @@ def cleanup_inactive_sessions():
 cleanup_thread = threading.Thread(target=cleanup_inactive_sessions, daemon=True)
 cleanup_thread.start()
 
-# --- MQTT Functions ---
-
 def get_mqtt_client(session_id):
-    """Get or create MQTT client for this session"""
     if session_id not in mqtt_clients:
         client = mqtt.Client(f"flask_blackjack_{session_id}_{time.time()}")
         mqtt_clients[session_id] = {
@@ -78,7 +72,6 @@ def get_mqtt_client(session_id):
     return mqtt_clients[session_id]
 
 def send_to_arduino(session_id, message):
-    """Send a message to Arduino via MQTT for this session"""
     try:
         client_info = get_mqtt_client(session_id)
         client_info['client'].publish(client_info['topic'], message)
@@ -87,7 +80,6 @@ def send_to_arduino(session_id, message):
         print(f"MQTT publish error: {e}")
 
 def setup_mqtt_client(session_id):
-    """Connects the MQTT client for this session"""
     client_info = get_mqtt_client(session_id)
     try:
         if not client_info['connected']:
