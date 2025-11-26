@@ -4,7 +4,7 @@
  Date: 12/15/2025
 
  Final Project
- Description: Card counting system with multiple strategies
+ Description: Card counting system with multiple strategies, MQTT Heartbeat, and GPS.
  Issues: No issues
  **************************************************************************/
 
@@ -15,9 +15,11 @@
 #include <WiFiSSLClient.h>
 #include <Arduino_JSON.h>
 #include <ArduinoMqttClient.h>
+#include <TinyGPSPlus.h> 
 
 #include "my_library.h"
 #include "counting_strategies.h"
+#include "heartbeat.h"
 
 // Internet Configuration
 const char* wifi_ssid = "GuestZ";               // REPLACE
@@ -35,14 +37,15 @@ const char mqttBroker[] = "broker.hivemq.com";
 const int mqttPort = 1883;
 const char subTopic[] = "gmu/ece508/team08/blkjck_table1";
 
-// const char subTopicHeartbeat[] = " gmu/ece508/team08/player1";
+const char pubTopicHeartbeat[] = "gmu/ece508/team08/player1"; 
 //*************************************************************
 
-
+TinyGPSPlus gps; 
 WiFiSSLClient client;
 
-#define vibOutPin 5 // Vibrator actuator
-#define SW1_PIN 10 // Switch
+// Hardware Configuration (Changed from #define to const int for extern compatibility)
+const int vibOutPin = 5; // Vibrator actuator
+#define SW1_PIN 10  // Switch
 
 int statusWiFi = WL_IDLE_STATUS;
 #define I2C_ADDRESS 0x3C
@@ -52,8 +55,10 @@ int statusWiFi = WL_IDLE_STATUS;
 
 // Initialize the Adafruit OLED display driver
 Adafruit_SSD1306 myOled(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// MQTT Client instantiation (Defined here, externed in heartbeat.h)
 WiFiClient wifiClient;
-MqttClient mqttClient(wifiClient); // Instantiate the client
+MqttClient mqttClient(wifiClient); 
 
 int scrollPosition = 0;
 unsigned long lastScrollTime = 0;
@@ -64,8 +69,16 @@ long currMillis, prevMillis;
 char tmpBuffer[64];
 String oledline[9];
 
+// Heartbeat timers and data (Defined here, externed in heartbeat.h)
+unsigned long lastHeartbeatTime = 0;
+const unsigned long heartbeatInterval = 3000; // 3 seconds
+String lastCard = "None"; // Tracks the last card read
+//*************************************************************
+
 JSONVar sensorObj;
 String stringJson;
+
+// Card Counting state (Defined here, externed in heartbeat.h)
 int runningCount = 0;
 double trueCount = 0.0;
 
@@ -82,6 +95,9 @@ bool coldAlertSent = true; // START "cold" alert as already sent (disarmed)
 CountingStrategy currentStrategy = HILO; // Default to Hi-Lo
 bool lastSwitchState = HIGH;
 
+
+
+// VIBRATION CONFIG
 void vibrate(int duration) {
 
   oledline[7] = "       VIBRATING!"; 
@@ -95,9 +111,6 @@ void vibrate(int duration) {
   oledline[7] = ""; 
   displayTextOLED(oledline); 
 }
-
-// VIBRATION CONFIG
-
 // Count is Hot!
 void vibrateHot() {
   vibrate(300);
@@ -106,12 +119,10 @@ void vibrateHot() {
   delay(150);
   vibrate(300);
 }
-
 // Count is Reset
 void vibrateReset() {
   vibrate(3000); // Long 3-second hold
 }
-
 // Count cooled down
 void vibrateCold() {
   vibrate(500); // Very short blip
@@ -147,7 +158,7 @@ void checkStrategySwitch() {
     displayTextOLED(oledline);
     
     // Haptic feedback
-    vibrate(125);
+    vibrate(250); 
     
     oledline[7] = "";
     displayTextOLED(oledline);
@@ -159,8 +170,11 @@ void checkStrategySwitch() {
 }
 
 void setup() {
-  //Initialize serial:
+
   Serial.begin(9600);
+  Serial1.begin(9600);  //Serial1 for the GPS module (typical speed 9600)
+  Serial.println("Starting GPS on Serial1...");
+
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(vibOutPin, OUTPUT); 
   pinMode(SW1_PIN, INPUT_PULLUP); // Configure switch with internal pull-up
@@ -190,7 +204,7 @@ void setup() {
   }
 
   oledline[3] = "Strategy: " + getStrategyName(currentStrategy);
-  oledline[4] = "Last Card: AKQJT9876";
+  oledline[4] = "Last Card: AKQJT98765";
   oledline[5] = "Run Count: 0";
   oledline[6] = "True Count: 0.00";
   
@@ -228,6 +242,9 @@ void setup() {
      Serial.println("Subscribed!");
   }
 
+  // Set the initial heartbeat time so it publishes quickly after setup
+  lastHeartbeatTime = millis();
+
 
   // Send Discord connection notification
   long color;
@@ -252,11 +269,12 @@ void onMqttMessage(int messageSize) {
 
   Serial.println(msgString);
   
-  // CARD COUNTING ALGORITHM
-
   msgString.trim();
   if (msgString.length() > 0) {
     char card = msgString.charAt(0);
+    // Store the last card for the heartbeat
+    lastCard = msgString;
+    
     // Local variables for Discord message
     long color;
     String content;
@@ -267,12 +285,12 @@ void onMqttMessage(int messageSize) {
         runningCount = 0;
         trueCount = 0.0;
         cardsDealt = 0;
+        lastCard = "Shuffle"; // Update last card for reset
         
         // Reset alert flags
         hotAlertSent = false;
         coldAlertSent = true; // Set to true to prevent "back to 0" alert
 
-        
         vibrateReset(); 
         
         // Send Shuffle Notification
@@ -284,7 +302,9 @@ void onMqttMessage(int messageSize) {
         break;
 
       default:
-        // Use the strategy system to get card value
+
+        // CARD COUNTING ALGORITHM
+
         int cardValue = getCardValue(card, currentStrategy);
         runningCount += cardValue;
         break;
@@ -302,8 +322,7 @@ void onMqttMessage(int messageSize) {
     if (decksRemaining > 0) {
       trueCount = (double)runningCount / decksRemaining;
     } else {
-      trueCount = 0.0;
-      // Shoe is over, reset count
+      trueCount = 0.0; // Shoe is over, reset count
     }
 
 
@@ -313,7 +332,7 @@ void onMqttMessage(int messageSize) {
     oledline[6] = "True Count: " + String(trueCount, 2);
 
 
-    // Hot alert (threshold may need adjustment for Omega II)
+    // Hot alert
     if (runningCount > 4 && !hotAlertSent) {
       hotAlertSent = true;
       coldAlertSent = false;
@@ -341,17 +360,25 @@ void onMqttMessage(int messageSize) {
   
   } 
 
-  displayTextOLED(oledline); // Refresh the display
+  displayTextOLED(oledline);
 }
 
 void loop() {
 
+  while (Serial1.available() > 0) {
+    char c = Serial1.read();
+    gps.encode(c); 
+  }
+
   // Check for strategy switch
   checkStrategySwitch();
   
-  // MQTT polling
+  // MQTT subscription polling
   mqttClient.poll();
   currMillis = millis();
+
+  // Heartbeat packets
+  checkAndPublishHeartbeat(currMillis);
 
   if (currMillis - prevMillis > 1000) {
     prevMillis = currMillis;
@@ -361,7 +388,7 @@ void loop() {
     getWiFiRSSI(tmpBuffer);
     oledline[2] = String(tmpBuffer);
     
-    // Row 8: Show subscription
+    // Row 8: Show subscription topic
     oledline[8] = subTopic;
 
     displayTextOLED(oledline);

@@ -6,10 +6,7 @@
 // NEW INCLUDES FOR MOVED FUNCTIONS
 #include <Adafruit_SSD1306.h>
 #include <WiFiSSLClient.h> 
-// Note: We use 'extern' in the header to reference these globals defined in the .ino file.
 
-
-// --- Original Functions ---
 
 void convHHMMSS(unsigned long currSeconds, char *uptimeDDHHMMSS) 
 {
