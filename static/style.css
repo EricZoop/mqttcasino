@@ -72,6 +72,18 @@ hr {
     object-fit: contain;
 }
 
+.discord-logo {
+    height: 36px;
+    width: auto;
+    cursor: pointer;
+    transition: transform 0.25s ease, filter 0.25s ease;
+}
+
+.discord-logo:hover {
+    transform: scale(1.08);
+    filter: drop-shadow(0 0 6px rgba(88, 101, 242, 0.7)); /* Discord blur glow */
+}
+
 .cheatsheet {
     margin-top: 15rem;
     height: 1024px;   /* adjust as needed */
