@@ -79,6 +79,13 @@ hr {
     object-fit: contain;
 }
 
+.cardstrat {
+    margin-top: 1rem;
+    width: 1024px;   /* adjust as needed */
+    height: auto;
+    object-fit: contain;
+}
+
 h1 {
     font-size: 3rem;
     font-weight: 700;

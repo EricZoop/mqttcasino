@@ -1,23 +1,23 @@
-/*
- * Card Counting Strategies Library - Header File
- * Contains different card counting systems for blackjack
- */
-
 #ifndef COUNTING_STRATEGIES_H
 #define COUNTING_STRATEGIES_H
 
-#include <Arduino.h>
+#include <Arduino.h> // FIX: Added this include to define the String type
 
-// Strategy types
+// Enum for selecting the card counting strategy
 enum CountingStrategy {
-  HILO = 0,
-  OMEGA_II = 1
+  HILO,
+  OMEGA_II,
+  HALVES
 };
 
-// FUNCTION PROTOTYPES
-int getCardValue(char card, CountingStrategy strategy);
+// Function declarations
 int getHiLoValue(char card);
 int getOmegaIIValue(char card);
-String getStrategyName(CountingStrategy strategy);
+double getHalvesValue(char card); 
 
+// Get the count value for a card based on the selected strategy
+double getCardValue(char card, CountingStrategy strategy); 
+
+// Get strategy name for display
+String getStrategyName(CountingStrategy strategy); // No more error on String
 #endif // COUNTING_STRATEGIES_H

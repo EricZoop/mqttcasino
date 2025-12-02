@@ -17,7 +17,7 @@ extern const int vibOutPin;
 extern const char pubTopicHeartbeat[];
 
 // Card Counting State
-extern int runningCount;
+extern double runningCount;
 extern double trueCount;
 extern String lastCard;
 extern CountingStrategy currentStrategy; // NEW: Added to access the strategy

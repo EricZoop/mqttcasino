@@ -62,7 +62,7 @@
                   <label>MQTT Configuration</label>
                   <!-- Top row: Broker URL + Port -->
                   <div class="mqtt-config-row">
-                     <input type="text" id="mqtt-broker" placeholder="Broker" value="broker.hivemq.com" />
+                     <input type="text" id="mqtt-broker" placeholder="Broker" value="public.cloud.shiftr.io" />
                      <input type="number" id="mqtt-port" placeholder="Port" value="1883" class="port-input" />
                   </div>
                   <!-- Bottom row: Topic + Update button -->
@@ -132,6 +132,8 @@
       </div>
 
       <div><img src="{{ url_for('static', filename='cheatsheet.png') }}" class="cheatsheet" alt="Cheat Sheet"></div>
+
+      <div><img src="{{ url_for('static', filename='cardstrat.png') }}" class="cardstrat" alt="Count Strategies"></div>
       
       <script src="{{ url_for('static', filename='script.js') }}" defer></script>
    </body>
