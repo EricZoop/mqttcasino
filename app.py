@@ -1,22 +1,17 @@
-import paho.mqtt.client as mqtt # type: ignore
 from flask import Flask, render_template, jsonify, request # type: ignore
 import time
 import helpers
 import secrets
 import threading
+from mqtt_service import MqttService
 
 app = Flask(__name__)
+mqtt_service = MqttService()
 
-# Session timeout
+# --- Session Management ---
 SESSION_TIMEOUT_SECONDS = 10 * 60  # 10 minutes
-SESSION_CLEANUP_INTERVAL_SECONDS = 60  
-
-# Store MQTT clients per session
-mqtt_clients = {}
-
-# Track last activity time for each session
+SESSION_CLEANUP_INTERVAL = 60
 session_last_activity = {}
-
 
 def update_session_activity(session_id):
     session_last_activity[session_id] = time.time()
@@ -24,7 +19,7 @@ def update_session_activity(session_id):
 def cleanup_inactive_sessions():
     """Background thread to cleanup inactive sessions"""
     while True:
-        time.sleep(SESSION_CLEANUP_INTERVAL_SECONDS)
+        time.sleep(SESSION_CLEANUP_INTERVAL)
         current_time = time.time()
         sessions_to_delete = []
         
@@ -34,20 +29,12 @@ def cleanup_inactive_sessions():
         
         for session_id in sessions_to_delete:
             try:
-                # Disconnect MQTT client
-                if session_id in mqtt_clients:
-                    try:
-                        mqtt_clients[session_id]['client'].loop_stop()
-                        mqtt_clients[session_id]['client'].disconnect()
-                    except:
-                        pass
-                    del mqtt_clients[session_id]
+                # Delegate MQTT cleanup to the service
+                mqtt_service.disconnect_session(session_id)
                 
-                # Remove session state
                 if session_id in helpers.session_states:
                     del helpers.session_states[session_id]
                 
-                # Remove activity tracking
                 if session_id in session_last_activity:
                     del session_last_activity[session_id]
                 
@@ -55,108 +42,56 @@ def cleanup_inactive_sessions():
             except Exception as e:
                 print(f"[CLEANUP] Error cleaning up session {session_id[:8]}: {e}")
 
-# Start cleanup thread
 cleanup_thread = threading.Thread(target=cleanup_inactive_sessions, daemon=True)
 cleanup_thread.start()
 
-def get_mqtt_client(session_id):
-    if session_id not in mqtt_clients:
-        client = mqtt.Client(f"flask_blackjack_{session_id}_{time.time()}")
-        mqtt_clients[session_id] = {
-            'client': client,
-            'broker': "broker.hivemq.com",
-            'port': 1883,
-            'topic': f"gmu/ece508/team08/blkjck_{session_id[:5]}",
-            'connected': False
-        }
-    return mqtt_clients[session_id]
-
-def send_to_arduino(session_id, message):
-    try:
-        client_info = get_mqtt_client(session_id)
-        client_info['client'].publish(client_info['topic'], message)
-        print(f"[{session_id[:5]}] Card revealed on table: {message}")
-    except Exception as e:
-        print(f"MQTT publish error: {e}")
-
-def setup_mqtt_client(session_id):
-    client_info = get_mqtt_client(session_id)
-    try:
-        if not client_info['connected']:
-            client_info['client'].connect(client_info['broker'], client_info['port'], 60)
-            client_info['client'].loop_start()
-            client_info['connected'] = True
-            print(f"[{session_id[:5]}] MQTT Client Connected to {client_info['broker']}:{client_info['port']} on topic {client_info['topic']}")
-    except Exception as e:
-        print(f"MQTT connection failed: {e}")
-
-def get_session_id_from_request():
-    """Extract session_id from request body or query params"""
-    # Try to get from JSON body first
+def get_session_id():
+    """Helper to extract session ID from JSON body or Args"""
     if request.is_json:
         data = request.get_json()
         if data and 'session_id' in data:
             return data['session_id']
-    
-    # Try to get from query params
     return request.args.get('session_id')
 
-# --- Flask Routes ---
+# --- Routes ---
 
 @app.route('/')
 def index():
-    """Render the main game page"""
     return render_template('blackjack.html')
 
 @app.route('/init_session', methods=['POST'])
 def init_session():
-    """Initialize a new session"""
     new_session_id = secrets.token_hex(16)
     
-    # Initialize game state for new session
+    # Initialize game state
     helpers.init_session_state(new_session_id)
     helpers.build_shoe(new_session_id)
-    setup_mqtt_client(new_session_id)
     update_session_activity(new_session_id)
     
-    client_info = get_mqtt_client(new_session_id)
+    # Initialize MQTT via Service
+    mqtt_service.create_client(new_session_id)
+    mqtt_service.connect_client(new_session_id)
+    
+    config = mqtt_service.get_config(new_session_id)
     
     return jsonify({
         'session_id': new_session_id,
-        'broker': client_info['broker'],
-        'port': client_info['port'],
-        'topic': client_info['topic'],
+        'broker': config['broker'],
+        'port': config['port'],
+        'topic': config['topic'],
         'message': f'Session created: {new_session_id[:5]}'
     })
 
 @app.route('/host_table', methods=['POST'])
 def host_table():
-    """Create a new table (new session)"""
-    new_session_id = secrets.token_hex(16)
-    
-    # Initialize game state for new session
-    helpers.init_session_state(new_session_id)
-    helpers.build_shoe(new_session_id)
-    setup_mqtt_client(new_session_id)
-    update_session_activity(new_session_id)
-    
-    client_info = get_mqtt_client(new_session_id)
-    
-    return jsonify({
-        'session_id': new_session_id,
-        'broker': client_info['broker'],
-        'port': client_info['port'],
-        'topic': client_info['topic'],
-        'message': f'New table hosted! Session: {new_session_id[:5]}'
-    })
+    return init_session()
 
 @app.route('/set_bet', methods=['POST'])
 def set_bet():
-    """Set the bet amount before dealing"""
-    session_id = get_session_id_from_request()
-    if not session_id:
-        return jsonify({'error': 'No session ID provided'}), 400
+    session_id = get_session_id()
+    if not session_id: return jsonify({'error': 'No session ID provided'}), 400
     
+    update_session_activity(session_id)
     data = request.get_json()
     bet_amount = data.get('amount', helpers.MIN_BET)
     
@@ -176,14 +111,10 @@ def set_bet():
 
 @app.route('/deal', methods=['POST'])
 def deal():
-    """Start a new game by dealing initial cards"""
-    session_id = get_session_id_from_request()
-    if not session_id:
-        return jsonify({'error': 'No session ID provided'}), 400
+    session_id = get_session_id()
+    if not session_id: return jsonify({'error': 'No session ID provided'}), 400
     
-    # Update activity timestamp when cards are dealt
     update_session_activity(session_id)
-    
     game_state = helpers.get_session_state(session_id)
     
     if game_state['bank'] < helpers.MIN_BET:
@@ -192,14 +123,14 @@ def deal():
     if game_state['current_bet'] > game_state['bank']:
         game_state['current_bet'] = min(game_state['bank'], game_state['current_bet'])
     
-    # Deduct bet from bank
+    # Deduct bet and reset state
     game_state['bank'] -= game_state['current_bet']
-    
-    # Reset game state but keep bank
     bank_backup = game_state['bank']
     current_bet_backup = game_state['current_bet']
+    
     helpers.reset_game_state(session_id)
     game_state = helpers.get_session_state(session_id)
+    
     game_state['bank'] = bank_backup
     game_state['current_bet'] = current_bet_backup
     
@@ -219,16 +150,20 @@ def deal():
     
     active_hand = game_state['player_hands'][0]
     
+    # Player Card 1
     active_hand['hand'].append(card1)
-    send_to_arduino(session_id, card1)
+    mqtt_service.publish_card(session_id, card1)
     
+    # Dealer Card 1 (Hidden)
     game_state['dealer_hand'].append(card2)
     
+    # Player Card 2
     active_hand['hand'].append(card3)
-    send_to_arduino(session_id, card3)
+    mqtt_service.publish_card(session_id, card3)
     
+    # Dealer Card 2 (Visible)
     game_state['dealer_hand'].append(card4)
-    send_to_arduino(session_id, card4)
+    mqtt_service.publish_card(session_id, card4)
     
     active_hand['value'] = helpers.calculate_hand_value(active_hand['hand'])
     game_state['dealer_value'] = helpers.CARD_VALUES[card4[:-1]]
@@ -237,7 +172,8 @@ def deal():
         active_hand['status'] = 'blackjack'
         game_state['message'] = "Blackjack! Let's see what the dealer has..."
         game_state['active_hand_index'] = -1
-        helpers.dealer_plays(session_id, lambda msg: send_to_arduino(session_id, msg))
+        # Use lambda to route dealer actions through our service
+        helpers.dealer_plays(session_id, lambda msg: mqtt_service.publish_card(session_id, msg))
     else:
         game_state['message'] = f"Your turn for Hand 1 (Bet: ${game_state['current_bet']})"
         helpers.update_hand_options(session_id)
@@ -246,15 +182,12 @@ def deal():
 
 @app.route('/hit', methods=['POST'])
 def hit():
-    """Player hits - deal another card"""
-    session_id = get_session_id_from_request()
-    if not session_id:
-        return jsonify({'error': 'No session ID provided'}), 400
+    session_id = get_session_id()
+    if not session_id: return jsonify({'error': 'No session ID provided'}), 400
+    update_session_activity(session_id)
     
     game_state = helpers.get_session_state(session_id)
-    
-    if game_state['game_status'] != 'playing':
-        return jsonify({'error': 'Game not in progress'}), 400
+    if game_state['game_status'] != 'playing': return jsonify({'error': 'Game not in progress'}), 400
     
     active_hand = game_state['player_hands'][game_state['active_hand_index']]
 
@@ -262,7 +195,7 @@ def hit():
     active_hand['hand'].append(new_card)
     active_hand['value'] = helpers.calculate_hand_value(active_hand['hand'])
     
-    send_to_arduino(session_id, new_card)
+    mqtt_service.publish_card(session_id, new_card)
     
     game_state['can_double'] = False
     game_state['can_split'] = False
@@ -280,15 +213,12 @@ def hit():
 
 @app.route('/stand', methods=['POST'])
 def stand():
-    """Player stands - dealer's turn"""
-    session_id = get_session_id_from_request()
-    if not session_id:
-        return jsonify({'error': 'No session ID provided'}), 400
+    session_id = get_session_id()
+    if not session_id: return jsonify({'error': 'No session ID provided'}), 400
+    update_session_activity(session_id)
     
     game_state = helpers.get_session_state(session_id)
-    
-    if game_state['game_status'] != 'playing':
-        return jsonify({'error': 'Game not in progress'}), 400
+    if game_state['game_status'] != 'playing': return jsonify({'error': 'Game not in progress'}), 400
     
     active_hand = game_state['player_hands'][game_state['active_hand_index']]
     active_hand['status'] = 'stood'
@@ -300,10 +230,9 @@ def stand():
 
 @app.route('/double', methods=['POST'])
 def double_down():
-    """Player doubles down."""
-    session_id = get_session_id_from_request()
-    if not session_id:
-        return jsonify({'error': 'No session ID provided'}), 400
+    session_id = get_session_id()
+    if not session_id: return jsonify({'error': 'No session ID provided'}), 400
+    update_session_activity(session_id)
     
     game_state = helpers.get_session_state(session_id)
     
@@ -312,14 +241,15 @@ def double_down():
     
     active_hand = game_state['player_hands'][game_state['active_hand_index']]
     
-    # Deduct additional bet from bank
+    # Deduct additional bet
     game_state['bank'] -= active_hand['bet']
     active_hand['bet'] *= 2
     
     new_card = helpers.deal_card(session_id)
     active_hand['hand'].append(new_card)
     active_hand['value'] = helpers.calculate_hand_value(active_hand['hand'])
-    send_to_arduino(session_id, new_card)
+    
+    mqtt_service.publish_card(session_id, new_card)
     
     game_state['can_double'] = False
     game_state['can_split'] = False
@@ -336,17 +266,16 @@ def double_down():
 
 @app.route('/split', methods=['POST'])
 def split():
-    """Player splits a pair."""
-    session_id = get_session_id_from_request()
-    if not session_id:
-        return jsonify({'error': 'No session ID provided'}), 400
+    session_id = get_session_id()
+    if not session_id: return jsonify({'error': 'No session ID provided'}), 400
+    update_session_activity(session_id)
     
     game_state = helpers.get_session_state(session_id)
     
     if game_state['game_status'] != 'playing' or not game_state['can_split']:
         return jsonify({'error': 'Cannot split now'}), 400
     
-    # Deduct additional bet from bank
+    # Deduct additional bet
     game_state['bank'] -= game_state['current_bet']
         
     active_hand = game_state['player_hands'][game_state['active_hand_index']]
@@ -363,17 +292,19 @@ def split():
     
     game_state['player_hands'].insert(game_state['active_hand_index'] + 1, new_hand)
     
+    # Deal to first hand
     new_card_1 = helpers.deal_card(session_id)
     active_hand['hand'].append(new_card_1)
     active_hand['value'] = helpers.calculate_hand_value(active_hand['hand'])
-    send_to_arduino(session_id, new_card_1)
+    mqtt_service.publish_card(session_id, new_card_1)
     
     time.sleep(0.5)
     
+    # Deal to second (new) hand
     new_card_2 = helpers.deal_card(session_id)
     new_hand['hand'].append(new_card_2)
     new_hand['value'] = helpers.calculate_hand_value(new_hand['hand'])
-    send_to_arduino(session_id, new_card_2)
+    mqtt_service.publish_card(session_id, new_card_2)
     
     rank1 = active_hand['hand'][0][:-1]
     is_ace_split = (helpers.CARD_VALUES[rank1] == 11)
@@ -396,21 +327,20 @@ def split():
 
 @app.route('/dealer_step', methods=['POST'])
 def dealer_step():
-    """Performs one step of the dealer's turn."""
-    session_id = get_session_id_from_request()
-    if not session_id:
-        return jsonify({'error': 'No session ID provided'}), 400
+    session_id = get_session_id()
+    if not session_id: return jsonify({'error': 'No session ID provided'}), 400
     
     game_state = helpers.get_session_state(session_id)
     
     if game_state['game_status'] != 'dealer_turn':
         return jsonify({'error': 'Not dealer\'s turn'}), 400
 
-    # Step 1: Reveal hidden card if it's the first step
+    # Step 1: Reveal hidden card
     if game_state['dealer_hidden']:
         game_state['dealer_hidden'] = False
         game_state['dealer_value'] = helpers.calculate_hand_value(game_state['dealer_hand'])
-        send_to_arduino(session_id, game_state['dealer_hand'][0])
+        
+        mqtt_service.publish_card(session_id, game_state['dealer_hand'][0])
         game_state['message'] = f"Dealer reveals. Value is {game_state['dealer_value']}"
         
         if game_state['dealer_value'] >= 17:
@@ -418,12 +348,13 @@ def dealer_step():
         
         return jsonify(game_state)
 
-    # Step 2: Draw a card if under 17
+    # Step 2: Draw card if < 17
     if game_state['dealer_value'] < 17:
         new_card = helpers.deal_card(session_id)
         game_state['dealer_hand'].append(new_card)
         game_state['dealer_value'] = helpers.calculate_hand_value(game_state['dealer_hand'])
-        send_to_arduino(session_id, new_card)
+        
+        mqtt_service.publish_card(session_id, new_card)
         
         if game_state['dealer_value'] > 21:
             game_state['message'] = "Dealer busts!"
@@ -440,10 +371,8 @@ def dealer_step():
 
 @app.route('/shuffle', methods=['POST'])
 def shuffle():
-    """Shuffle the deck and notify Arduino"""
-    session_id = get_session_id_from_request()
-    if not session_id:
-        return jsonify({'error': 'No session ID provided'}), 400
+    session_id = get_session_id()
+    if not session_id: return jsonify({'error': 'No session ID provided'}), 400
     
     game_state = helpers.get_session_state(session_id)
     
@@ -451,7 +380,9 @@ def shuffle():
         return jsonify({'error': 'Cannot shuffle during a game'}), 400
     
     helpers.build_shoe(session_id)
-    send_to_arduino(session_id, "0")
+    # Send shuffle signal (0)
+    mqtt_service.publish_card(session_id, "0")
+    
     game_state['cards_remaining'] = helpers.get_shoe_count(session_id)
     game_state['message'] = f"Deck shuffled! {game_state['cards_remaining']} cards remaining."
     
@@ -459,10 +390,8 @@ def shuffle():
 
 @app.route('/reset_bank', methods=['POST'])
 def reset_bank():
-    """Reset the player's bank to starting amount"""
-    session_id = get_session_id_from_request()
-    if not session_id:
-        return jsonify({'error': 'No session ID provided'}), 400
+    session_id = get_session_id()
+    if not session_id: return jsonify({'error': 'No session ID provided'}), 400
     
     game_state = helpers.get_session_state(session_id)
     
@@ -476,82 +405,63 @@ def reset_bank():
 
 @app.route('/state', methods=['GET'])
 def get_state():
-    """Get current game state"""
     session_id = request.args.get('session_id')
-    if not session_id:
-        return jsonify({'error': 'No session ID provided'}), 400
+    if not session_id: return jsonify({'error': 'No session ID provided'}), 400
     
     # Initialize if doesn't exist
     if session_id not in helpers.session_states:
         helpers.init_session_state(session_id)
         helpers.build_shoe(session_id)
-        setup_mqtt_client(session_id)
+        mqtt_service.create_client(session_id)
         update_session_activity(session_id)
     
     game_state = helpers.get_session_state(session_id)
-    client_info = get_mqtt_client(session_id)
+    config = mqtt_service.get_config(session_id)
     
-    # Include MQTT config in response
     response = dict(game_state)
-    response['mqtt_config'] = {
-        'broker': client_info['broker'],
-        'port': client_info['port'],
-        'topic': client_info['topic']
-    }
+    response['mqtt_config'] = config
     
     return jsonify(response)
 
 @app.route('/update_mqtt', methods=['POST'])
 def update_mqtt():
-    """Update MQTT configuration"""
-    session_id = get_session_id_from_request()
-    if not session_id:
-        return jsonify({'error': 'No session ID provided'}), 400
+    session_id = get_session_id()
+    if not session_id: return jsonify({'error': 'No session ID provided'}), 400
     
     data = request.get_json()
     new_broker = data.get('broker')
     new_port = data.get('port')
     new_topic = data.get('topic')
     
-    # Validate inputs
     if not new_broker or not new_topic:
         return jsonify({'error': 'Broker and topic cannot be empty'}), 400
     
     try:
         new_port = int(new_port)
-        if new_port < 1 or new_port > 65535:
-            return jsonify({'error': 'Port must be between 1 and 65535'}), 400
     except ValueError:
         return jsonify({'error': 'Invalid port number'}), 400
     
-    client_info = get_mqtt_client(session_id)
-    
-    # Disconnect old client
+    # Use service to recreate
     try:
-        client_info['client'].loop_stop()
-        client_info['client'].disconnect()
-        client_info['connected'] = False
-    except:
-        pass
-    
-    # Update configuration
-    client_info['broker'] = new_broker
-    client_info['port'] = new_port
-    client_info['topic'] = new_topic
-    
-    # Reconnect with new settings
-    try:
-        client_info['client'].connect(new_broker, new_port, 60)
-        client_info['client'].loop_start()
-        client_info['connected'] = True
-        return jsonify({
-            'broker': new_broker,
-            'port': new_port,
-            'topic': new_topic,
-            'message': 'MQTT configuration updated successfully'
-        })
+        mqtt_service.create_client(session_id, broker=new_broker, port=new_port, topic=new_topic)
+        success = mqtt_service.connect_client(session_id)
+        
+        if success:
+            return jsonify({
+                'broker': new_broker, 
+                'port': new_port, 
+                'topic': new_topic, 
+                'message': 'MQTT configuration updated and connected'
+            })
+        else:
+            return jsonify({
+                'broker': new_broker, 
+                'port': new_port, 
+                'topic': new_topic, 
+                'message': 'MQTT updated, connecting in background...'
+            })
     except Exception as e:
-        return jsonify({'error': f'Failed to connect: {str(e)}'}), 500
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)

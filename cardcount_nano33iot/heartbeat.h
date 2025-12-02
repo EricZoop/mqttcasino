@@ -4,11 +4,10 @@
 #include <Arduino.h>
 #include <ArduinoMqttClient.h>
 #include <TinyGPSPlus.h>
-#include <WiFiNINA.h> // Needed for WiFi.RSSI()
-#include "counting_strategies.h" // Assuming this is needed for CountingStrategy type
+#include <WiFiNINA.h>
 
-// --- External Global Variables (Defined in cardcount_nano33iot.ino) ---
-// Complex objects are declared extern so they can be accessed.
+#include "counting_strategies.h" 
+
 extern MqttClient mqttClient;
 extern TinyGPSPlus gps; 
 
@@ -26,13 +25,8 @@ extern CountingStrategy currentStrategy; // NEW: Added to access the strategy
 extern unsigned long lastHeartbeatTime;
 extern const unsigned long heartbeatInterval;
 
-// --- Function Prototypes ---
 extern String getStrategyName(CountingStrategy strategy); // Assuming this is globally visible (e.g., in counting_strategies.h)
 
-/**
- * @brief Checks if the heartbeat interval has passed and publishes a new status message.
- * @param currentMillis The current value of millis().
- */
 void checkAndPublishHeartbeat(unsigned long currentMillis);
 
 #endif

@@ -15,7 +15,7 @@ Issues: No issues
 #include <WiFiSSLClient.h>
 #include <Arduino_JSON.h>
 #include <ArduinoMqttClient.h>
-#include <TinyGPSPlus.h> 
+#include <TinyGPSPlus.h>
 
 #include "my_library.h"
 #include "counting_strategies.h"
@@ -26,37 +26,39 @@ const char* wifi_ssid = "GuestZ";     // REPLACE
 const char* wifi_pass = "rooster65";  // REPLACE
 //*************************************************************
 
-// Discord Configuration
+// MQTT Configuration
+const char mqttBroker[] = "public.cloud.shiftr.io";
+const int mqttPort = 1883;
+const char mqttUsername[] = "public";
+const char mqttPassword[] = "public";
+
+const char subTopic[] = "gmu/ece508/team08/blkjck_table1";
+const char pubTopicHeartbeat[] = "gmu/ece508/team08/player1";
+//*************************************************************
+
+// Discord API Configuration
 const char webhookHost[] = "discord.com";
 const int webhookPort = 443;
 const char webhookPath[] = "/api/webhooks/1442641244252803223/lTG5afLzq5f_i0Qw6wy_1lhYNjQlci6zncikj7vuZF80o0du6d35ITz5qeOckVECoLb5";
 //*************************************************************
 
-// MQTT Configuration
-const char mqttBroker[] = "broker.hivemq.com";
-const int mqttPort = 1883;
-const char subTopic[] = "gmu/ece508/team08/blkjck_table1";
-
-const char pubTopicHeartbeat[] = "gmu/ece508/team08/player1"; 
-//*************************************************************
-
-TinyGPSPlus gps; 
+TinyGPSPlus gps;
 WiFiSSLClient client;
 
-const int vibOutPin = 5; // Vibrator actuator
-#define SW1_PIN 10  // Switch
+const int vibOutPin = 5;  // Vibrator actuator
+#define SW1_PIN 10        // Switch
 
 int statusWiFi = WL_IDLE_STATUS;
 #define I2C_ADDRESS 0x3C
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
-#define OLED_RESET    -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+#define SCREEN_WIDTH 128  // OLED display width, in pixels
+#define SCREEN_HEIGHT 64  // OLED display height, in pixels
+#define OLED_RESET -1     // Reset pin # (or -1 if sharing Arduino reset pin)
 
 // Initialize the Adafruit OLED display driver
 Adafruit_SSD1306 myOled(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 WiFiClient wifiClient;
-MqttClient mqttClient(wifiClient); 
+MqttClient mqttClient(wifiClient);
 
 long currMillis, prevMillis;
 char tmpBuffer[64];
@@ -65,16 +67,16 @@ String oledline[9];
 unsigned long lastHeartbeatTime = 0;
 const unsigned long heartbeatInterval = 3000;
 // 3 seconds
-String lastCard = "None"; // Tracks the last card read
+String lastCard = "None";  // Tracks the last card read
 //*************************************************************
 
 JSONVar sensorObj;
 String stringJson;
 // Card Counting state (Defined here, externed in heartbeat.h)
-double runningCount = 0.0; // MODIFIED: Changed from int to double to support Halves fractions
+double runningCount = 0.0;  // MODIFIED: Changed from int to double to support Halves fractions
 double trueCount = 0.0;
 const int totalDecks = 6;
-const int totalCards = totalDecks * 52; // 312
+const int totalCards = totalDecks * 52;  // 312
 
 int cardsDealt = 0;
 // Flags to ensure one-time alerts
@@ -93,98 +95,99 @@ bool lastSwitchState = HIGH;
 void vibrate(int duration) {
 
   oledline[7] = "       VIBRATING!";
-displayTextOLED(oledline);
+  displayTextOLED(oledline);
 
   digitalWrite(vibOutPin, HIGH);
   delay(duration);
   digitalWrite(vibOutPin, LOW);
-  
 
-  oledline[7] = ""; 
-  displayTextOLED(oledline); 
+
+  oledline[7] = "";
+  displayTextOLED(oledline);
 }
 // Count is Hot!
 void vibrateHot() {
   vibrate(300);
   delay(150);
-vibrate(300);
+  vibrate(300);
   delay(150);
   vibrate(300);
 }
 // Count is Reset
 void vibrateReset() {
   vibrate(3000);
-// Long 3-second hold
+  // Long 3-second hold
 }
 // Count cooled down
 void vibrateCold() {
   vibrate(500);
-// Very short blip
+  // Very short blip
 }
 
 void checkStrategySwitch() {
   bool currentSwitchState = digitalRead(SW1_PIN);
-// Detect button press (assuming pull-up, so LOW = pressed)
+  // Detect button press (assuming pull-up, so LOW = pressed)
   if (currentSwitchState == LOW && lastSwitchState == HIGH) {
     delay(50);
-// Debounce
-    
+    // Debounce
+
     // Toggle strategy (Hi-Lo -> Omega II -> Halves -> Hi-Lo)
     if (currentStrategy == HILO) {
       currentStrategy = OMEGA_II;
-    } else if (currentStrategy == OMEGA_II) { // ADDED: Cycle to Halves
-      currentStrategy = HALVES; 
-    } else { // Current is HALVES, cycle back to HILO
-      currentStrategy = HILO; 
-}
-    
+    } else if (currentStrategy == OMEGA_II) {  // ADDED: Cycle to Halves
+      currentStrategy = HALVES;
+    } else {  // Current is HALVES, cycle back to HILO
+      currentStrategy = HILO;
+    }
+
     // Reset counts when changing strategy
-    runningCount = 0.0; // MODIFIED: Reset to double
-trueCount = 0.0;
+    runningCount = 0.0;  // MODIFIED: Reset to double
+    trueCount = 0.0;
     cardsDealt = 0;
     hotAlertSent = false;
     coldAlertSent = true;
-// Update all relevant OLED lines
+    // Update all relevant OLED lines
     oledline[3] = "Strategy: " + getStrategyName(currentStrategy);
     oledline[4] = "Last Card: AKQJT98765";
-oledline[5] = "Run Count: " + String(runningCount, 2); // Show 2 decimal places
+    oledline[5] = "Run Count: " + String(runningCount, 2);  // Show 2 decimal places
     oledline[6] = "True Count: 0.00";
-    
+
     displayTextOLED(oledline);
-    
+
     // Haptic feedback
     vibrate(250);
-oledline[7] = "";
+    oledline[7] = "";
     displayTextOLED(oledline);
-    
+
     Serial.println("Strategy: " + getStrategyName(currentStrategy));
   }
-  
+
   lastSwitchState = currentSwitchState;
 }
 
 void setup() {
 
   Serial.begin(9600);
-Serial1.begin(9600);  //Serial1 for the GPS module (typical speed 9600)
+  Serial1.begin(9600);  //Serial1 for the GPS module (typical speed 9600)
   Serial.println("Starting GPS on Serial1...");
 
   pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(vibOutPin, OUTPUT); 
+  pinMode(vibOutPin, OUTPUT);
   pinMode(SW1_PIN, INPUT_PULLUP);
-// Configure switch with internal pull-up
+  // Configure switch with internal pull-up
 
   Wire.begin();
   if (!myOled.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS)) {
     Serial.println(F("SSD1306 allocation failed"));
-    for (;;);
-// Don't proceed, loop forever
+    for (;;)
+      ;
+    // Don't proceed, loop forever
   }
 
   // Clear the buffer
   myOled.clearDisplay();
   myOled.display();
-// Show initial blank screen
+  // Show initial blank screen
 
   myOled.setTextSize(1);
   myOled.setTextColor(SSD1306_WHITE);
@@ -192,62 +195,65 @@ Serial1.begin(9600);  //Serial1 for the GPS module (typical speed 9600)
 
   // Row 1
   oledline[1] = "MQTT Casino";
-// Initialize all lines
-  int jj; for (jj = 2; jj <= 8; jj++) {
+  // Initialize all lines
+  int jj;
+  for (jj = 2; jj <= 8; jj++) {
     oledline[jj] = "";
-}
+  }
 
   oledline[3] = "Strategy: " + getStrategyName(currentStrategy);
   oledline[4] = "Last Card: AKQJT98765";
-  oledline[5] = "Run Count: 0.00"; // MODIFIED: Init to 2 decimal places
-oledline[6] = "True Count: 0.00";
-  
+  oledline[5] = "Run Count: 0.00";  // MODIFIED: Init to 2 decimal places
+  oledline[6] = "True Count: 0.00";
+
   displayTextOLED(oledline);
   // check for the presence of the shield:
   if (WiFi.status() == WL_NO_SHIELD) {
     Serial.println("WiFi shield not present");
-// don't continue:
-    while (true);
+    // don't continue:
+    while (true)
+      ;
   }
 
   // attempt to connect to Wifi network:
-  while ( statusWiFi != WL_CONNECTED) {
+  while (statusWiFi != WL_CONNECTED) {
     Serial.println("Attempting to connect to SSID: " + String(wifi_ssid));
-statusWiFi = WiFi.begin(wifi_ssid, wifi_pass);
+    statusWiFi = WiFi.begin(wifi_ssid, wifi_pass);
   }
   Serial.println("Connected to WiFi");
 
   Serial.println("Setting up MQTT...");
   mqttClient.onMessage(onMqttMessage);
-// Connect to the MQTT broker
+  mqttClient.setUsernamePassword(mqttUsername, mqttPassword);
+
+  // Connect to the MQTT broker
   Serial.println("Connecting to MQTT broker...");
   while (!mqttClient.connect(mqttBroker, mqttPort)) {
     Serial.println(mqttClient.connectError());
-}
+  }
   Serial.println("Connected to MQTT broker!");
 
 
   Serial.print("Subscribing to topic: ");
   Serial.println(subTopic);
   if (!mqttClient.subscribe(subTopic)) {
-     Serial.println("Subscription failed!");
-} else {
-     Serial.println("Subscribed!");
+    Serial.println("Subscription failed!");
+  } else {
+    Serial.println("Subscribed!");
   }
 
   // Set the initial heartbeat time so it publishes quickly after setup
   lastHeartbeatTime = millis();
-// Send Discord connection notification
+  // Send Discord connection notification
   long color;
   String content;
   String message;
 
   color = 2483968;
-// Green
-  content = ""; // Ping Users or Roles
-  message = String("Connected to Discord Server\\n\\n MQTT Configuration: \\n") +
-          "`" + String(mqttBroker) + "` \\n `" + String(mqttPort) + "` \\n `" + String(subTopic) + "`";
-sendDiscordNotification(buildJsonPayload(message, color, content));
+  // Green
+  content = "";  // Ping Users or Roles
+  message = String("Connected to Discord Server\\n\\n MQTT Configuration: \\n") + "`" + String(mqttBroker) + "` \\n `" + String(mqttPort) + "` \\n `" + String(subTopic) + "`";
+  sendDiscordNotification(buildJsonPayload(message, color, content));
 }
 
 
@@ -255,97 +261,96 @@ void onMqttMessage(int messageSize) {
 
   String msgString = "";
   msgString.reserve(messageSize);
-while (mqttClient.available()) {
+  while (mqttClient.available()) {
     msgString += (char)mqttClient.read();
   }
 
   Serial.println(msgString);
-  
+
   msgString.trim();
-if (msgString.length() > 0) {
+  if (msgString.length() > 0) {
     char card = msgString.charAt(0);
-// Store the last card for the heartbeat
+    // Store the last card for the heartbeat
     lastCard = msgString;
-// Local variables for Discord message
+    // Local variables for Discord message
     long color;
     String content;
     String message;
-switch (card) {
-      case '0': // Reset case
-        runningCount = 0.0; // MODIFIED: Reset to double
-trueCount = 0.0;
+    switch (card) {
+      case '0':              // Reset case
+        runningCount = 0.0;  // MODIFIED: Reset to double
+        trueCount = 0.0;
         cardsDealt = 0;
-        lastCard = "Shuffle"; // Update last card for reset
-        
+        lastCard = "Shuffle";  // Update last card for reset
+
         // Reset alert flags
         hotAlertSent = false;
-coldAlertSent = true; // Set to true to prevent "back to 0" alert
+        coldAlertSent = true;  // Set to true to prevent "back to 0" alert
 
         vibrateReset();
-// Send Shuffle Notification
+        // Send Shuffle Notification
         color = 0;
-// Black
+        // Black
         content = "";
-message = "Dealer shuffled cards! Table's count is reset.";
+        message = "Dealer shuffled cards! Table's count is reset.";
         sendDiscordNotification(buildJsonPayload(message, color, content));
 
         break;
-default:
+      default:
 
         // CARD COUNTING ALGORITHM
 
-        double cardValue = getCardValue(card, currentStrategy); // MODIFIED: Changed from int to double
-runningCount += cardValue;
+        double cardValue = getCardValue(card, currentStrategy);  // MODIFIED: Changed from int to double
+        runningCount += cardValue;
         break;
     }
 
     // Increment cards dealt unless reset command
     if (card != '0') {
       cardsDealt++;
-}
+    }
 
     // True count calculation
     double decksRemaining = (double)(totalCards - cardsDealt) / 52.0;
-// Protect against division by zero
+    // Protect against division by zero
     if (decksRemaining > 0) {
       trueCount = runningCount / decksRemaining;
-} else {
+    } else {
       trueCount = 0.0;
-// Shoe is over, reset count
+      // Shoe is over, reset count
     }
 
 
     // Update OLED lines
     oledline[4] = "Last Card: " + msgString;
-oledline[5] = "Run Count: " + String(runningCount, 2); // Show 2 decimal places
+    oledline[5] = "Run Count: " + String(runningCount, 2);  // Show 2 decimal places
     oledline[6] = "True Count: " + String(trueCount, 2);
-// Hot alert
-    if (runningCount > 4.0 && !hotAlertSent) { // MODIFIED: Comparison to double
+    // Hot alert
+    if (runningCount > 4.0 && !hotAlertSent) {  // MODIFIED: Comparison to double
       hotAlertSent = true;
-coldAlertSent = false;
+      coldAlertSent = false;
 
-      vibrateHot(); 
+      vibrateHot();
 
-      color = 16732672; // Red Orange
+      color = 16732672;  // Red Orange
       content = "<@&1434702820430581892> please join the table.";
-message = "The running count is __**+5**__! 🔥";
+      message = "The running count is __**+5**__! 🔥";
       sendDiscordNotification(buildJsonPayload(message, color, content));
-}
+    }
 
     // Cold alert
-    else if (runningCount < 1.0 && !coldAlertSent) { // MODIFIED: Comparison to double
+    else if (runningCount < 1.0 && !coldAlertSent) {  // MODIFIED: Comparison to double
       coldAlertSent = true;
-hotAlertSent = false;
+      hotAlertSent = false;
 
-      vibrateCold(); 
+      vibrateCold();
 
-      color = 3325951; // Blue
+      color = 3325951;  // Blue
       content = "";
-message = "The running count is back to __**0**__. 🥶";
+      message = "The running count is back to __**0**__. 🥶";
       sendDiscordNotification(buildJsonPayload(message, color, content));
-}
-  
-  } 
+    }
+  }
 
   displayTextOLED(oledline);
 }
@@ -354,25 +359,25 @@ void loop() {
 
   while (Serial1.available() > 0) {
     char c = Serial1.read();
-gps.encode(c); 
+    gps.encode(c);
   }
 
   // Check for strategy switch
   checkStrategySwitch();
-  
+
   // MQTT subscription polling
   mqttClient.poll();
   currMillis = millis();
-// Heartbeat packets
+  // Heartbeat packets
   checkAndPublishHeartbeat(currMillis);
 
   if (currMillis - prevMillis > 1000) {
     prevMillis = currMillis;
     digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-// Row 2: WiFi RSSI and IP address
+    // Row 2: WiFi RSSI and IP address
     getWiFiRSSI(tmpBuffer);
     oledline[2] = String(tmpBuffer);
-// Row 8: Show subscription topic
+    // Row 8: Show subscription topic
     oledline[8] = subTopic;
 
     displayTextOLED(oledline);
