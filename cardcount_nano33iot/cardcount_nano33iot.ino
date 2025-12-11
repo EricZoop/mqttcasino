@@ -8,7 +8,7 @@
   reads incoming cards applying user's chosen algorithim via switch, 
   sends live Discord API message updates and vibration haptic feedback. 
   Publishes heartbeat packet containing strategy, running & true count, 
-  latest card, GPS (lat,lon, alt), signal strength (dBm), and uptime.
+  latest card, GPS (lat,lon,alt), signal strength (dBm), and uptime.
 
   Go to MQTT Casino http://157.151.158.181:5000/ to play
   
