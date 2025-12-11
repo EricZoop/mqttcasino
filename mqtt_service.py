@@ -22,7 +22,7 @@ class MqttService:
         # Use defaults if not provided
         broker = broker or self.DEFAULT_BROKER
         port = port or self.DEFAULT_PORT
-        topic = topic or f"gmu/ece508/team08/blkjck_{session_id[:5]}"
+        topic = topic or f"gmu/ece508/team08/blkjck_table1" #f"gmu/ece508/team08/blkjck_{session_id[:5]}"
 
         # Clean up existing if present
         self.disconnect_session(session_id)

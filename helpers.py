@@ -147,7 +147,7 @@ def update_hand_options(session_id):
         state['can_double'] = False
         state['can_split'] = False
 
-def move_to_next_hand(session_id):
+def move_to_next_hand(session_id, send_func=None):
     """Moves focus to the next hand, or triggers dealer's turn if all hands are played."""
     state = get_session_state(session_id)
     
@@ -159,7 +159,8 @@ def move_to_next_hand(session_id):
         if active_hand['value'] == 21 and len(active_hand['hand']) == 2:
             active_hand['status'] = 'blackjack'
             state['message'] = f"Hand {state['active_hand_index'] + 1} has Blackjack!"
-            move_to_next_hand(session_id)
+            # Recursively call with the send_func
+            move_to_next_hand(session_id, send_func)
         else:
             active_hand['status'] = 'playing'
             state['message'] = f"Your turn for Hand {state['active_hand_index'] + 1}"
@@ -173,6 +174,12 @@ def move_to_next_hand(session_id):
             state['can_split'] = False
             state['can_double'] = False
             state['dealer_hidden'] = False
+            
+            # --- FIX STARTS HERE ---
+            # If provided, send the MQTT message to reveal the hole card
+            if send_func and len(state['dealer_hand']) > 0:
+                send_func(state['dealer_hand'][0])
+            # --- FIX ENDS HERE ---
             
             final_messages = []
             for i, p_hand in enumerate(state['player_hands']):

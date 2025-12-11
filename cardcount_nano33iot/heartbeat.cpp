@@ -17,7 +17,7 @@ void publishHeartbeat() {
   heartbeatObj["class"] = "ece508";
   heartbeatObj["team"] = "08";
   heartbeatObj["device"] = "nano33iot";
-  heartbeatObj["uptime"] = String(uptimeBuffer); 
+  heartbeatObj["uptime"] = String(uptimeBuffer);
   heartbeatObj["rssi"] = String(rssi);
   heartbeatObj["strategy"] = getStrategyName(currentStrategy); // Added card counting strategy
   heartbeatObj["last_card"] = lastCard; // Use extern global
@@ -57,7 +57,6 @@ void publishHeartbeat() {
 }
 
 void checkAndPublishHeartbeat(unsigned long currentMillis) {
-  // Uses extern global interval and time
   if (currentMillis - lastHeartbeatTime >= heartbeatInterval) {
     publishHeartbeat();
   }

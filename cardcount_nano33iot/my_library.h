@@ -3,16 +3,16 @@
 
 #include <Arduino.h>
 #include <Adafruit_SSD1306.h>
-#include <WiFiSSLClient.h> // Required for WiFiSSLClient
-#include <WiFiNINA.h> // Required for WiFiClient
+#include <WiFiSSLClient.h>
+#include <WiFiNINA.h> 
 
-// EXTERNAL GLOBAL VARIABLES (Declared in main .ino file)
+// EXTERNAL GLOBAL VARIABLES
 extern Adafruit_SSD1306 myOled;
 extern WiFiSSLClient client;
 extern const char webhookHost[];
 extern const char webhookPath[];
 extern const int webhookPort;
-extern char tmpBuffer[64]; // Used in buildJsonPayload
+extern char tmpBuffer[64]; 
 
 // BITMAPS
 const unsigned char spade_bitmap[] PROGMEM   = // Hex // Binary

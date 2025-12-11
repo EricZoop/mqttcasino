@@ -2,19 +2,21 @@
 #include <Arduino.h>
 
 // Get the count value for a card based on the selected strategy
-double getCardValue(char card, CountingStrategy strategy) { // CHANGED: return type to double
+// https://www.qfit.com/card-counting.htm
+
+double getCardValue(char card, CountingStrategy strategy) {
   switch (strategy) {
     case HILO:
-      return (double)getHiLoValue(card); // Cast int to double
+      return (double)getHiLoValue(card);
     
     case OMEGA_II:
-      return (double)getOmegaIIValue(card); // Cast int to double
+      return (double)getOmegaIIValue(card);
 
-    case HALVES: // ADDED: Halves strategy
+    case HALVES: 
       return getHalvesValue(card);
     
     default:
-      return 0.0; // Return 0.0 for unknown/default
+      return 0.0;
   }
 }
 

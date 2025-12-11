@@ -33,13 +33,12 @@ void convCurrentTime(unsigned long currSeconds, char *timeStr)
     sprintf(timeStr, buf);
 };
 
-
 void getWiFiRSSI(char *wifiRSSI) 
 {
     sprintf(wifiRSSI, "%lddBm %d.%d.%d.%d", WiFi.RSSI(), WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3]);
 };
 
-// --- New Functions from .ino file ---
+
 
 String buildJsonPayload(const String& message, long color, const String& content) {
   
@@ -48,7 +47,7 @@ String buildJsonPayload(const String& message, long color, const String& content
   return "{"
          "\"content\":\"" + content + "\","
          "\"embeds\":[{"
-         "\"description\":\"" + timestampedMessage + "\"," // Use the new message
+         "\"description\":\"" + timestampedMessage + "\","
          "\"color\":" + String(color) + ","
          "\"author\":{"
          "\"name\":\"Player1 (Arduino Nano 33 IoT)\","
@@ -96,6 +95,7 @@ void displayTextOLED(String oledline[]) {
   myOled.setTextColor(SSD1306_WHITE);
   myOled.setCursor(0, 0);
   myOled.print(oledline[1]);
+  
   // Draw pixel art card suits
   int x = myOled.getCursorX() + 6;
   int y = myOled.getCursorY();

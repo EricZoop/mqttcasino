@@ -203,11 +203,13 @@ def hit():
     if active_hand['value'] > 21:
         active_hand['status'] = 'bust'
         game_state['message'] = f"Hand {game_state['active_hand_index'] + 1} busts!"
-        helpers.move_to_next_hand(session_id)
+        # Pass MQTT lambda to handle potential dealer reveal if all bust
+        helpers.move_to_next_hand(session_id, lambda c: mqtt_service.publish_card(session_id, c))
     elif active_hand['value'] == 21:
         active_hand['status'] = 'stood'
         game_state['message'] = f"Hand {game_state['active_hand_index'] + 1} has 21!"
-        helpers.move_to_next_hand(session_id)
+        # Pass MQTT lambda here as well
+        helpers.move_to_next_hand(session_id, lambda c: mqtt_service.publish_card(session_id, c))
     
     return jsonify(game_state)
 
@@ -224,7 +226,8 @@ def stand():
     active_hand['status'] = 'stood'
     
     game_state['message'] = f"Hand {game_state['active_hand_index'] + 1} stands."
-    helpers.move_to_next_hand(session_id)
+    # Pass MQTT lambda
+    helpers.move_to_next_hand(session_id, lambda c: mqtt_service.publish_card(session_id, c))
     
     return jsonify(game_state)
 
@@ -261,7 +264,8 @@ def double_down():
         active_hand['status'] = 'stood'
         game_state['message'] = f"Hand {game_state['active_hand_index'] + 1} doubles and stands."
     
-    helpers.move_to_next_hand(session_id)
+    # Pass MQTT lambda
+    helpers.move_to_next_hand(session_id, lambda c: mqtt_service.publish_card(session_id, c))
     return jsonify(game_state)
 
 @app.route('/split', methods=['POST'])
@@ -313,13 +317,15 @@ def split():
         active_hand['status'] = 'stood'
         new_hand['status'] = 'stood'
         game_state['message'] = "Split Aces! Each hand gets one card and stands."
-        helpers.move_to_next_hand(session_id)
+        # Pass MQTT lambda
+        helpers.move_to_next_hand(session_id, lambda c: mqtt_service.publish_card(session_id, c))
     else:
         helpers.update_hand_options(session_id)
         
         if active_hand['value'] == 21:
             active_hand['status'] = 'stood'
-            helpers.move_to_next_hand(session_id)
+            # Pass MQTT lambda
+            helpers.move_to_next_hand(session_id, lambda c: mqtt_service.publish_card(session_id, c))
         else:
             game_state['message'] = f"Split! Your turn for Hand {game_state['active_hand_index'] + 1}"
 

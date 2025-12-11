@@ -1,12 +1,22 @@
 /**************************************************************************
  Class: ECE508 Fall 2025
- Team 8
+ Team: 08
  Date: 12/15/2025
 
  Final Project
- Description: Card counting system with multiple strategies, MQTT Heartbeat, and GPS.
-Issues: No issues
- **************************************************************************/
+ Description: Arduino Nano 33 IoT subscribes via MQTT to a Blackjack table 
+  reads incoming cards applying user's chosen algorithim via switch, 
+  sends live Discord API message updates and vibration haptic feedback. 
+  Publishes heartbeat packet containing strategy, running & true count, 
+  latest card, GPS (lat,lon, alt), signal strength (dBm), and uptime.
+
+  Go to MQTT Casino http://157.151.158.181:5000/ to play
+  
+  GitHub https://github.com/EricZoop/mqttcasino
+  Demo https://www.youtube.com/watch?v=y2aZh6rLSks
+
+ Issues: No issues
+  **************************************************************************/
 
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -63,11 +73,12 @@ MqttClient mqttClient(wifiClient);
 long currMillis, prevMillis;
 char tmpBuffer[64];
 String oledline[9];
-// Heartbeat timers and data (Defined here, externed in heartbeat.h)
+
+// heartbeat.h
 unsigned long lastHeartbeatTime = 0;
 const unsigned long heartbeatInterval = 3000;
-// 3 seconds
-String lastCard = "None";  // Tracks the last card read
+
+
 //*************************************************************
 
 JSONVar sensorObj;
@@ -78,18 +89,17 @@ double trueCount = 0.0;
 const int totalDecks = 6;
 const int totalCards = totalDecks * 52;  // 312
 
+String lastCard = "None";  
+
 int cardsDealt = 0;
+
 // Flags to ensure one-time alerts
 bool hotAlertSent = false;
-bool coldAlertSent = true;
-// START "cold" alert as already sent (disarmed)
+bool coldAlertSent = true; // disarmed
 
 // Card counting strategy
 CountingStrategy currentStrategy = HILO;
-// Default to Hi-Lo
-bool lastSwitchState = HIGH;
-
-
+bool lastSwitchState = HIGH; // Default to Hi-Lo
 
 // VIBRATION CONFIG
 void vibrate(int duration) {
@@ -101,52 +111,53 @@ void vibrate(int duration) {
   delay(duration);
   digitalWrite(vibOutPin, LOW);
 
-
   oledline[7] = "";
   displayTextOLED(oledline);
 }
+
 // Count is Hot!
 void vibrateHot() {
-  vibrate(300);
+  vibrate(300); 
   delay(150);
   vibrate(300);
   delay(150);
-  vibrate(300);
+  vibrate(300); 
 }
+
 // Count is Reset
 void vibrateReset() {
-  vibrate(3000);
-  // Long 3-second hold
+  vibrate(3000); // Long 3-second hold
 }
+
 // Count cooled down
 void vibrateCold() {
   vibrate(500);
-  // Very short blip
 }
 
 void checkStrategySwitch() {
-  bool currentSwitchState = digitalRead(SW1_PIN);
-  // Detect button press (assuming pull-up, so LOW = pressed)
+  bool currentSwitchState = digitalRead(SW1_PIN); 
+  
+  // Detect button press (LOW = pressed)
   if (currentSwitchState == LOW && lastSwitchState == HIGH) {
-    delay(50);
-    // Debounce
-
-    // Toggle strategy (Hi-Lo -> Omega II -> Halves -> Hi-Lo)
+    delay(50); // Debounce
+    
+    // Cycle strategy (Hi-Lo -> Omega II -> Halves -> Hi-Lo)
     if (currentStrategy == HILO) {
       currentStrategy = OMEGA_II;
-    } else if (currentStrategy == OMEGA_II) {  // ADDED: Cycle to Halves
+    } else if (currentStrategy == OMEGA_II) { 
       currentStrategy = HALVES;
-    } else {  // Current is HALVES, cycle back to HILO
+    } else { 
       currentStrategy = HILO;
     }
 
     // Reset counts when changing strategy
-    runningCount = 0.0;  // MODIFIED: Reset to double
+    runningCount = 0.0;
     trueCount = 0.0;
     cardsDealt = 0;
     hotAlertSent = false;
     coldAlertSent = true;
-    // Update all relevant OLED lines
+
+    // Update
     oledline[3] = "Strategy: " + getStrategyName(currentStrategy);
     oledline[4] = "Last Card: AKQJT98765";
     oledline[5] = "Run Count: " + String(runningCount, 2);  // Show 2 decimal places
@@ -165,16 +176,16 @@ void checkStrategySwitch() {
   lastSwitchState = currentSwitchState;
 }
 
+
 void setup() {
 
   Serial.begin(9600);
-  Serial1.begin(9600);  //Serial1 for the GPS module (typical speed 9600)
+  Serial1.begin(9600);  //Serial1 for the GPS module
   Serial.println("Starting GPS on Serial1...");
 
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(vibOutPin, OUTPUT);
   pinMode(SW1_PIN, INPUT_PULLUP);
-  // Configure switch with internal pull-up
 
   Wire.begin();
   if (!myOled.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS)) {
@@ -195,6 +206,7 @@ void setup() {
 
   // Row 1
   oledline[1] = "MQTT Casino";
+
   // Initialize all lines
   int jj;
   for (jj = 2; jj <= 8; jj++) {
@@ -203,7 +215,7 @@ void setup() {
 
   oledline[3] = "Strategy: " + getStrategyName(currentStrategy);
   oledline[4] = "Last Card: AKQJT98765";
-  oledline[5] = "Run Count: 0.00";  // MODIFIED: Init to 2 decimal places
+  oledline[5] = "Run Count: 0.00"; 
   oledline[6] = "True Count: 0.00";
 
   displayTextOLED(oledline);
@@ -242,16 +254,16 @@ void setup() {
     Serial.println("Subscribed!");
   }
 
-  // Set the initial heartbeat time so it publishes quickly after setup
+
   lastHeartbeatTime = millis();
+
   // Send Discord connection notification
   long color;
   String content;
   String message;
 
-  color = 2483968;
-  // Green
-  content = "";  // Ping Users or Roles
+  color = 2483968;   // Green
+  content = "";      // Ping Users or Roles
   message = String("Connected to Discord Server\\n\\n MQTT Configuration: \\n") + "`" + String(mqttBroker) + "` \\n `" + String(mqttPort) + "` \\n `" + String(subTopic) + "`";
   sendDiscordNotification(buildJsonPayload(message, color, content));
 }
@@ -270,27 +282,29 @@ void onMqttMessage(int messageSize) {
   msgString.trim();
   if (msgString.length() > 0) {
     char card = msgString.charAt(0);
-    // Store the last card for the heartbeat
+
     lastCard = msgString;
-    // Local variables for Discord message
+
     long color;
     String content;
     String message;
     switch (card) {
-      case '0':              // Reset case
-        runningCount = 0.0;  // MODIFIED: Reset to double
+
+      // Reset case
+      case '0':              
+        runningCount = 0.0; 
         trueCount = 0.0;
         cardsDealt = 0;
-        lastCard = "Shuffle";  // Update last card for reset
+        lastCard = "Shuffle";
 
         // Reset alert flags
         hotAlertSent = false;
-        coldAlertSent = true;  // Set to true to prevent "back to 0" alert
+        coldAlertSent = true;
 
         vibrateReset();
+        
         // Send Shuffle Notification
-        color = 0;
-        // Black
+        color = 0; // Black
         content = "";
         message = "Dealer shuffled cards! Table's count is reset.";
         sendDiscordNotification(buildJsonPayload(message, color, content));
@@ -300,7 +314,7 @@ void onMqttMessage(int messageSize) {
 
         // CARD COUNTING ALGORITHM
 
-        double cardValue = getCardValue(card, currentStrategy);  // MODIFIED: Changed from int to double
+        double cardValue = getCardValue(card, currentStrategy);
         runningCount += cardValue;
         break;
     }
@@ -325,6 +339,7 @@ void onMqttMessage(int messageSize) {
     oledline[4] = "Last Card: " + msgString;
     oledline[5] = "Run Count: " + String(runningCount, 2);  // Show 2 decimal places
     oledline[6] = "True Count: " + String(trueCount, 2);
+    
     // Hot alert
     if (runningCount > 4.0 && !hotAlertSent) {  // MODIFIED: Comparison to double
       hotAlertSent = true;
@@ -368,15 +383,18 @@ void loop() {
   // MQTT subscription polling
   mqttClient.poll();
   currMillis = millis();
+
   // Heartbeat packets
   checkAndPublishHeartbeat(currMillis);
 
   if (currMillis - prevMillis > 1000) {
     prevMillis = currMillis;
     digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+
     // Row 2: WiFi RSSI and IP address
     getWiFiRSSI(tmpBuffer);
     oledline[2] = String(tmpBuffer);
+    
     // Row 8: Show subscription topic
     oledline[8] = subTopic;
 
