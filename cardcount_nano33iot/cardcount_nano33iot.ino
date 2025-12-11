@@ -52,11 +52,15 @@ const int webhookPort = 443;
 const char webhookPath[] = "/api/webhooks/1442641244252803223/lTG5afLzq5f_i0Qw6wy_1lhYNjQlci6zncikj7vuZF80o0du6d35ITz5qeOckVECoLb5";
 //*************************************************************
 
-TinyGPSPlus gps;
+
+
+
+// Configured for ECE508 breakout board
+TinyGPSPlus gps;          // GPS RX-TX pins
 WiFiSSLClient client;
 
 const int vibOutPin = 5;  // Vibrator actuator
-#define SW1_PIN 10        // Switch
+#define SW1_PIN 10        // Switch 
 
 int statusWiFi = WL_IDLE_STATUS;
 #define I2C_ADDRESS 0x3C
@@ -78,12 +82,12 @@ String oledline[9];
 unsigned long lastHeartbeatTime = 0;
 const unsigned long heartbeatInterval = 3000;
 
-
-//*************************************************************
-
 JSONVar sensorObj;
 String stringJson;
-// Card Counting state (Defined here, externed in heartbeat.h)
+
+
+
+// Card Counting state 
 double runningCount = 0.0;  // MODIFIED: Changed from int to double to support Halves fractions
 double trueCount = 0.0;
 const int totalDecks = 6;
