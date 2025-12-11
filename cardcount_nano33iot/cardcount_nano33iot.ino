@@ -88,7 +88,7 @@ String stringJson;
 
 
 // Card Counting state 
-double runningCount = 0.0;  // MODIFIED: Changed from int to double to support Halves fractions
+double runningCount = 0.0;
 double trueCount = 0.0;
 const int totalDecks = 6;
 const int totalCards = totalDecks * 52;  // 312
@@ -345,7 +345,7 @@ void onMqttMessage(int messageSize) {
     oledline[6] = "True Count: " + String(trueCount, 2);
     
     // Hot alert
-    if (runningCount > 4.0 && !hotAlertSent) {  // MODIFIED: Comparison to double
+    if (runningCount > 4.0 && !hotAlertSent) {
       hotAlertSent = true;
       coldAlertSent = false;
 
@@ -358,7 +358,7 @@ void onMqttMessage(int messageSize) {
     }
 
     // Cold alert
-    else if (runningCount < 1.0 && !coldAlertSent) {  // MODIFIED: Comparison to double
+    else if (runningCount < 1.0 && !coldAlertSent) {
       coldAlertSent = true;
       hotAlertSent = false;
 
