@@ -1,6 +1,6 @@
 # MQTT Casino
 
-This repository consists of two parts: The Arduino code (everything contained in the cardcount_nano33iot folder) and the Python Flask Application (everything else).
+This fantastic repository consists of two parts: The Arduino code (everything contained in the cardcount_nano33iot folder) and the Python Flask Application (everything else).
 The Arduino code was built to run on an Arduino Nano 33 IoT and connect with a session of the Flask application via MQTT.
 The Flask application can be run locally, but is being hosted on OCI and can be accessed at 157.151.158.181:5000/ on a web browser.
 
