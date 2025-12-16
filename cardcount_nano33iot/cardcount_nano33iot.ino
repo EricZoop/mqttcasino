@@ -32,8 +32,8 @@
 #include "heartbeat.h"
 
 // Internet Configuration
-const char* wifi_ssid = "GuestZ";     // REPLACE
-const char* wifi_pass = "rooster65";  // REPLACE
+const char* wifi_ssid = "";     // REPLACE
+const char* wifi_pass = "";  // REPLACE
 //*************************************************************
 
 // MQTT Configuration
@@ -49,7 +49,7 @@ const char pubTopicHeartbeat[] = "gmu/ece508/team08/player1";
 // Discord API Configuration
 const char webhookHost[] = "discord.com";
 const int webhookPort = 443;
-const char webhookPath[] = "/api/webhooks/1442641244252803223/lTG5afLzq5f_i0Qw6wy_1lhYNjQlci6zncikj7vuZF80o0du6d35ITz5qeOckVECoLb5";
+const char webhookPath[] = "";
 //*************************************************************
 
 
